@@ -22,6 +22,8 @@ saves a shareable HTML report next to where you ran it.
 Needs Go 1.26+ and make.
 
 ```bash
+git clone https://github.com/Rusty-Gopher/kupre.git
+cd kupre
 make tui       # builds and starts the interactive mode
 ```
 
