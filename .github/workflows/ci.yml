@@ -49,7 +49,8 @@ jobs:
       - name: Assert no mutating Kubernetes calls
         run: |
           if grep -rnE '\.(Create|Update|Delete|Patch|Apply|DeleteCollection|UpdateStatus)\(' \
-               --include='*.go' pkg/ cmd/ | grep -v '_test.go' | grep -v 'spinner.Update'; then
+               --include='*.go' pkg/ cmd/ \
+               | grep -v '_test.go' | grep -v 'spinner.Update' | grep -v 'os\.Create('; then
             echo "found a mutating client call - kupre must remain read-only"
             exit 1
           fi
