@@ -1,0 +1,141 @@
+# Minimum RBAC for kupre.
+#
+# kupre is read-only by construction: it issues only get, list and watch, and
+# the Cluster type in pkg/analyzer exposes no method capable of a write. This
+# ClusterRole encodes exactly that - no create, update, patch or delete verb
+# appears anywhere below, and adding one would be a bug.
+#
+# Apply with:
+#   kubectl apply -f deploy/rbac.yaml
+#   kubectl create token kupre -n kube-system --duration=1h
+#
+# Every rule is annotated with the checks that need it, so anything unused can
+# be removed for a tighter grant.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kupre
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kupre-preflight
+rules:
+  # node-ready, kubelet-version-skew, node-pressure, container-runtime,
+  # schedulable-node-count, openstack-external-ccm, openstack-node-provider-id
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+
+  # pods-not-ready, gitrepo-volumes, flexvolume-in-use,
+  # openstack-cinder-inline-ephemeral, openstack-cinder-intree-migration
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+
+  # service-external-ips, legacy-endpoints, openstack-octavia-annotations,
+  # openstack-loadbalancer-health
+  - apiGroups: [""]
+    resources: ["services", "endpoints", "namespaces"]
+    verbs: ["get", "list"]
+
+  # unhealthy-pvs, intree-volume-sources, flexvolume-in-use
+  - apiGroups: [""]
+    resources: ["persistentvolumes", "persistentvolumeclaims"]
+    verbs: ["get", "list"]
+
+  # kube-proxy-mode reads only kube-system/kube-proxy. Narrow this with a
+  # namespaced Role if a cluster-wide configmap read is unacceptable - kupre
+  # degrades to a skipped check rather than failing.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+
+  # single-replica-workloads, openstack-cinder-csi-version and the component
+  # image scan
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "statefulsets", "replicasets"]
+    verbs: ["get", "list"]
+
+  # pdb-blocks-drain, pdb-unhealthy
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list"]
+
+  # webhook-failure-policy, webhook-admission-versions, webhook-scope,
+  # webhook-timeout
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources:
+      - "validatingwebhookconfigurations"
+      - "mutatingwebhookconfigurations"
+    verbs: ["get", "list"]
+
+  # intree-storage-provisioner, csi-driver-declared, default-storageclass,
+  # openstack-cinder-csi-health
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses", "csidrivers", "csinodes"]
+    verbs: ["get", "list"]
+
+  # crd-deprecated-versions
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list"]
+
+  # removed-api-objects lists objects through deprecated endpoints to look for
+  # a last-applied-configuration naming a removed apiVersion. Only the groups
+  # that have ever had a removal are needed; kupre skips any it cannot read
+  # rather than failing the scan.
+  - apiGroups:
+      - "batch"
+      - "policy"
+      - "discovery.k8s.io"
+      - "events.k8s.io"
+      - "autoscaling"
+      - "node.k8s.io"
+      - "flowcontrol.apiserver.k8s.io"
+      - "storage.k8s.io"
+      - "storagemigration.k8s.io"
+      - "scheduling.k8s.io"
+    resources: ["*"]
+    verbs: ["get", "list"]
+
+  # helm-release-removed-apis. This is the widest grant in the file: RBAC
+  # cannot filter by field selector, so reading Helm release secrets requires
+  # list on ALL secrets. kupre decodes only the manifest and chart metadata and
+  # never reads release values, but the credential exposure is real - remove
+  # this rule to trade the check (it skips cleanly) for a tighter grant.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+
+  # apiservice-availability, trust-bundle-expiry (APIService caBundles)
+  - apiGroups: ["apiregistration.k8s.io"]
+    resources: ["apiservices"]
+    verbs: ["get", "list"]
+
+  # capi-rollout-strategy, capi-drain-hang, capi-machines-consistent
+  # (both the upstream and the Kubermatic machine API groups)
+  - apiGroups: ["cluster.x-k8s.io", "cluster.k8s.io"]
+    resources: ["machinedeployments", "machines", "machinesets"]
+    verbs: ["get", "list"]
+
+  # deprecated-api-requests reads apiserver_requested_deprecated_apis from
+  # /metrics - observed-traffic evidence of deprecated API usage. Without this
+  # the check skips.
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kupre-preflight
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kupre-preflight
+subjects:
+  - kind: ServiceAccount
+    name: kupre
+    namespace: kube-system

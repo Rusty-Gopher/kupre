@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify formatting
+        run: |
+          out=$(gofmt -l $(find . -name '*.go' -not -path './vendor/*'))
+          if [ -n "$out" ]; then echo "needs gofmt:"; echo "$out"; exit 1; fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Verify dependencies are tidy
+        run: go mod tidy -diff
+
+      - name: Test
+        run: go test ./...
+
+      - name: Test with race detector
+        run: go test -race ./...
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      - name: Coverage
+        run: |
+          go test -coverprofile=coverage.out ./...
+          go tool cover -func=coverage.out | tail -1
+
+      # kupre is read-only by construction. This guards the property in CI so a
+      # mutating call cannot be introduced unnoticed.
+      - name: Assert no mutating Kubernetes calls
+        run: |
+          if grep -rnE '\.(Create|Update|Delete|Patch|Apply|DeleteCollection|UpdateStatus)\(' \
+               --include='*.go' pkg/ cmd/ | grep -v '_test.go' | grep -v 'spinner.Update'; then
+            echo "found a mutating client call - kupre must remain read-only"
+            exit 1
+          fi
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go build -o /dev/null ./cmd/kupre/

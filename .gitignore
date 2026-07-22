@@ -1,0 +1,27 @@
+# Credentials, never commit these.
+kubeconfig*
+*.kubeconfig
+*.key
+*.pem
+*.secret
+*.token
+clouds.yaml
+
+# Internal working material: specs, analyses, sample reports, test credentials.
+reference/
+
+# Generated reports; any html here is scan output, never source
+*.html
+
+# Build artifacts
+/kupre
+/dist/
+*.test
+*.out
+coverage.*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

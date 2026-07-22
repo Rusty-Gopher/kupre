@@ -1,0 +1,9 @@
+# The in-tree Cinder provisioner was removed from Kubernetes in 1.26. A
+# StorageClass still referencing it cannot provision volumes.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: legacy-cinder
+provisioner: kubernetes.io/cinder
+reclaimPolicy: Delete
+volumeBindingMode: Immediate

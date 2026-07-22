@@ -1,0 +1,61 @@
+# kupre release configuration. Validated against GoReleaser v2 (July 2026).
+# Dormant until a v* tag is pushed; test locally with:
+#   goreleaser check
+#   goreleaser release --snapshot --clean
+version: 2
+
+project_name: kupre
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: ./cmd/kupre
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+    # Reproducible builds: stamp the commit time, not the build time.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  # The release workflow attests this exact file; every artifact listed in it
+  # is covered by one attestation.
+  name_template: "checksums.txt"
+
+sboms:
+  - artifacts: archive
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  # v0 already says "unstable"; -beta/-rc tags additionally get the GitHub
+  # pre-release badge automatically.
+  prerelease: auto
+  draft: true # first releases deserve hand-written notes; publish after editing
+
+# Deferred to a later release on purpose: homebrew_casks, dockers_v2, krew.
+# Each is additive and non-breaking to introduce later.

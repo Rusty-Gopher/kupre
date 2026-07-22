@@ -1,0 +1,41 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write      # create the GitHub release
+  id-token: write      # Sigstore OIDC for attestations
+  attestations: write  # actions/attest
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history: changelog generation and previous-tag detection
+          # both break on shallow clones.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # GoReleaser shells out to syft for SBOMs; it is not embedded.
+      - uses: anchore/sbom-action/download-syft@v0
+
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # One attestation over the checksums file covers every artifact in it.
+      # Users verify with: gh attestation verify --owner Rusty-Gopher <file>
+      - uses: actions/attest@v4
+        with:
+          subject-checksums: ./dist/checksums.txt

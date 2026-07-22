@@ -1,0 +1,19 @@
+# The gitRepo volume plugin is disabled in Kubernetes 1.36 with no feature gate
+# to re-enable it. This pod will fail to start after that upgrade.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: legacy-content
+  namespace: default
+spec:
+  containers:
+    - name: web
+      image: nginx:1.27
+      volumeMounts:
+        - name: content
+          mountPath: /usr/share/nginx/html
+  volumes:
+    - name: content
+      gitRepo:
+        repository: https://github.example.invalid/org/site.git
+        revision: main

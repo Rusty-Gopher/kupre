@@ -1,0 +1,18 @@
+# A PodDisruptionBudget that permits zero evictions. Node drain will hang on
+# any node hosting these pods, stalling a rolling upgrade indefinitely.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: impress-backend
+  namespace: opendesk
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: impress-backend
+status:
+  observedGeneration: 1
+  expectedPods: 1
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0

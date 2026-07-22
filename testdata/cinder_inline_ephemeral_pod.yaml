@@ -1,0 +1,20 @@
+# cloud-provider-openstack removed inline CSI ephemeral volume support from
+# cinder-csi in v1.31. This pod stops scheduling once the driver is upgraded.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scratch-user
+  namespace: default
+spec:
+  containers:
+    - name: app
+      image: busybox:1.36
+      volumeMounts:
+        - name: scratch
+          mountPath: /scratch
+  volumes:
+    - name: scratch
+      csi:
+        driver: cinder.csi.openstack.org
+        volumeAttributes:
+          capacity: 1Gi

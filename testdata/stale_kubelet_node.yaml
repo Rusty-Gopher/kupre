@@ -1,0 +1,17 @@
+# A node whose kubelet trails the control plane by more than the supported
+# three minor versions.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-stale
+spec:
+  providerID: openstack://11111111-2222-3333-4444-555555555555
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+  nodeInfo:
+    kubeletVersion: v1.31.4
+    containerRuntimeVersion: containerd://1.7.29
+    kernelVersion: 6.8.0-106-generic
+    osImage: Ubuntu 24.04.4 LTS
