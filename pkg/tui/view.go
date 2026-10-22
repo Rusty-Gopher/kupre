@@ -104,15 +104,10 @@ func (m Model) viewWelcome() string {
 	return b.String() + m.help("enter continue · q quit")
 }
 
-// totalChecks counts every check the binary carries, including provider checks
-// that only run where they apply. Matches what `kupre checks` reports.
-func totalChecks() int {
-	n := len(analyzer.AllChecks())
-	for _, p := range provider.Registered() {
-		n += len(p.Checks())
-	}
-	return n
-}
+// totalChecks counts every check the binary carries, across all missions and
+// including provider checks that only run where they apply. Matches what
+// `kupre checks` reports.
+func totalChecks() int { return len(provider.Catalog()) }
 
 // viewMissionPicker asks what the user wants to do - the tool's front door.
 func (m Model) viewMissionPicker() string {

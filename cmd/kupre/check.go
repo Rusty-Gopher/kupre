@@ -69,7 +69,7 @@ func newMissionCmd(missionName, use, short string) *cobra.Command {
 	fs := cmd.Flags()
 	if mission.NeedsTarget {
 		fs.StringVar(&f.targetVersion, "target-version", "",
-			"Kubernetes version to upgrade to, e.g. 1.36.0 (required)")
+			"Kubernetes version to upgrade to, e.g. 1.37.0 (required)")
 	}
 	fs.StringVarP(&f.output, "output", "o", "table",
 		"output format: table (an ordered worklist), flat, json, markdown, or html")
@@ -223,11 +223,9 @@ func writeJSONFile(path string, rep *analyzer.Report, opts report.Options) error
 
 // loadPolicy resolves --policy, the ./.kupre.yaml default and --baseline.
 func loadPolicy(f checkFlags) (*policy.Policy, *policy.Baseline, error) {
-	known := policy.KnownChecks(analyzer.AllChecks())
-	for _, p := range provider.Registered() {
-		for name := range policy.KnownChecks(p.Checks()) {
-			known[name] = true
-		}
+	known := map[string]bool{}
+	for _, c := range provider.Catalog() {
+		known[c.Name] = true
 	}
 
 	var (

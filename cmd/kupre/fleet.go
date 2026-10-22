@@ -44,7 +44,7 @@ func newFleetCmd() *cobra.Command {
 
 	fs := cmd.Flags()
 	fs.StringVar(&f.targetVersion, "target-version", "",
-		"Kubernetes version to upgrade to, e.g. 1.36.0 (required)")
+		"Kubernetes version to upgrade to, e.g. 1.37.0 (required)")
 	fs.StringVarP(&f.output, "output", "o", "table",
 		"output format: table, json, or markdown")
 	fs.StringSliceVar(&f.contexts, "contexts", nil,

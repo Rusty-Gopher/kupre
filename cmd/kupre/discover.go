@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"sort"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/Rusty-Gopher/kupre/pkg/analyzer"
@@ -49,23 +51,26 @@ func newContextsCmd() *cobra.Command {
 func newChecksCmd() *cobra.Command {
 	var (
 		category string
+		mission  string
 		verbose  bool
 	)
 
 	cmd := &cobra.Command{
 		Use:   "checks",
 		Short: "List every preflight check kupre performs",
-		Long: "Lists the built-in checks and what each one looks for.\n\n" +
+		Long: "Lists every check, the missions that run it, and what it looks for.\n\n" +
 			"Provider-specific checks (OpenStack, etc.) are listed too, but at scan\n" +
 			"time they only run on clusters where that provider is auto-detected.",
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			checks := analyzer.AllChecks()
-			for _, p := range provider.Registered() {
-				checks = append(checks, p.Checks()...)
+			if mission != "" {
+				if _, ok := analyzer.MissionByName(mission); !ok {
+					return fmt.Errorf("--mission: unknown mission %q (want upgrade, health or certs)", mission)
+				}
 			}
+			checks := provider.Catalog()
 
 			sort.Slice(checks, func(i, j int) bool {
 				if checks[i].Category != checks[j].Category {
@@ -83,20 +88,24 @@ func newChecksCmd() *cobra.Command {
 				if category != "" && string(c.Category) != category {
 					continue
 				}
+				if mission != "" && !slices.Contains(c.Missions, mission) {
+					continue
+				}
 				if c.Category != lastCat {
 					if lastCat != "" {
-						fmt.Fprintln(w, "\t\t")
+						fmt.Fprintln(w, "\t\t\t")
 					}
-					fmt.Fprintf(w, "%s\t\t\n", upper(string(c.Category)))
+					fmt.Fprintf(w, "%s\t\t\t\n", upper(string(c.Category)))
 					lastCat = c.Category
 				}
-				fmt.Fprintf(w, "  %s\t%s\t%s\n", c.Name, c.Severity, c.Description)
+				fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", c.Name, c.Severity,
+					strings.Join(c.Missions, ","), c.Description)
 				if verbose {
 					if c.Evidence != "" {
-						fmt.Fprintf(w, "  \t\t  inspects: %s\n", c.Evidence)
+						fmt.Fprintf(w, "  \t\t\t  inspects: %s\n", c.Evidence)
 					}
 					if c.Limits != "" {
-						fmt.Fprintf(w, "  \t\t  cannot conclude: %s\n", c.Limits)
+						fmt.Fprintf(w, "  \t\t\t  cannot conclude: %s\n", c.Limits)
 					}
 				}
 				shown++
@@ -114,6 +123,8 @@ func newChecksCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&category, "category", "",
 		"show only one category: api, webhook, storage, node, workload, cloud")
+	cmd.Flags().StringVar(&mission, "mission", "",
+		"show only checks one mission runs: upgrade, health, certs")
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false,
 		"show what each check inspects and what it cannot conclude")
 	return cmd

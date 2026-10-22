@@ -34,7 +34,7 @@ func newRootCmd() *cobra.Command {
 			"First time here? Try:\n" +
 			"  kupre contexts                              # which clusters can I see?\n" +
 			"  kupre checks                                # what does it look for?\n" +
-			"  kupre check --target-version 1.36.0         # upgrade preflight\n" +
+			"  kupre check --target-version 1.37.0         # upgrade preflight\n" +
 			"  kupre health                                # health check\n" +
 			"  kupre                                       # interactive mode",
 		Version:       version,

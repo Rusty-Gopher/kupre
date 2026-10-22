@@ -236,14 +236,3 @@ func (p *Policy) applyWaiver(f *analyzer.Finding, w Waiver, today time.Time) {
 		Kind: "waiver", Reason: w.Reason, Owner: w.Owner, Expires: w.Expires,
 	}
 }
-
-// KnownChecks builds the set of valid check names from check lists.
-func KnownChecks(lists ...[]analyzer.Check) map[string]bool {
-	out := map[string]bool{}
-	for _, l := range lists {
-		for _, c := range l {
-			out[c.Name] = true
-		}
-	}
-	return out
-}
