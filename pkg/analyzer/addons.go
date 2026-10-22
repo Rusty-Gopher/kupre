@@ -118,9 +118,12 @@ func checkAddonCompat(ctx context.Context, c *Cluster, up Upgrade, a deprecation
 
 	var problems []string
 	switch {
-	case older:
+	case older && a.OlderUnmaintained:
 		problems = append(problems, fmt.Sprintf("%s %s predates every release in the vendor's "+
 			"matrix and is no longer maintained", a.Name, minor))
+	case older:
+		problems = append(problems, fmt.Sprintf("%s %s predates every release in the vendor's "+
+			"published matrix, so nothing vouches for it on this cluster", a.Name, minor))
 	case rel.Unmaintained:
 		problems = append(problems, fmt.Sprintf("%s %s is no longer a maintained release", a.Name, minor))
 	case rel.EOL != "":

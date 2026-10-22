@@ -145,3 +145,32 @@ func TestAddonDataConsistent(t *testing.T) {
 		}
 	}
 }
+
+func TestCalicoCompat(t *testing.T) {
+	tests := []struct {
+		name, image, from, to string
+		want                  Status
+		msg                   string
+	}{
+		{"3.33 is tested on 1.37", "quay.io/calico/node:v3.33.0", "1.36.4", "1.37.0", StatusPass, "is tested against Kubernetes 1.37"},
+		{"3.32 is not", "docker.io/calico/node:v3.32.2", "1.36.4", "1.37.0", StatusWarn, "not 1.37"},
+		{"older makes no maintenance claim", "calico/node:v3.29.1", "1.31.0", "1.32.0", StatusWarn, "nothing vouches"},
+		{"operator image is not calico", "quay.io/tigera/operator:v1.40.0", "1.36.0", "1.37.0", StatusSkip, "not detected"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := NewClusterForTest(fake.NewSimpleClientset(ciliumDS(tt.image)), MustParseVersion(tt.from))
+			up := Upgrade{From: MustParseVersion(tt.from), To: MustParseVersion(tt.to)}
+			got, err := checkAddonCompat(context.Background(), c, up, addon(t, "Calico"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Status != tt.want || !strings.Contains(got.Message, tt.msg) {
+				t.Errorf("got %s %q, want %s containing %q", got.Status, got.Message, tt.want, tt.msg)
+			}
+			if strings.Contains(got.Message, "no longer maintained") {
+				t.Errorf("Calico publishes no EOL policy, but kupre claimed one: %q", got.Message)
+			}
+		})
+	}
+}

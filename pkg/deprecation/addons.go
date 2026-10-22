@@ -17,6 +17,10 @@ type Addon struct {
 	Claim string
 	// Releases is newest first.
 	Releases []AddonRelease
+	// OlderUnmaintained is true when the vendor's policy makes anything older
+	// than the listed releases unmaintained. Without it kupre only says the
+	// version predates its data.
+	OlderUnmaintained bool
 }
 
 // AddonRelease is one minor release with the Kubernetes range the vendor
@@ -41,6 +45,9 @@ var Addons = []Addon{
 		Image:  "cert-manager-controller",
 		Source: "https://cert-manager.io/docs/releases/",
 		Claim:  "supports",
+		// "All cert-manager releases are supported at least until the
+		// release of a second subsequent version."
+		OlderUnmaintained: true,
 		Releases: []AddonRelease{
 			{Minor: "1.21", MinKube: "1.33", MaxKube: "1.36"},
 			{Minor: "1.20", MinKube: "1.32", MaxKube: "1.35"},
@@ -65,12 +72,31 @@ var Addons = []Addon{
 		Image:  "cilium/cilium",
 		Source: "https://docs.cilium.io/en/stable/network/kubernetes/compatibility/",
 		Claim:  "is e2e tested against",
+		// Older branches are absent from the maintained stable releases.
+		OlderUnmaintained: true,
 		Releases: []AddonRelease{
 			{Minor: "1.20", MinKube: "1.33", MaxKube: "1.36"},
 			{Minor: "1.19", MinKube: "1.32", MaxKube: "1.35"},
 			{Minor: "1.18", MinKube: "1.30", MaxKube: "1.33"},
 			{Minor: "1.17", MinKube: "1.29", MaxKube: "1.32", Unmaintained: true},
 			{Minor: "1.16", MinKube: "1.27", MaxKube: "1.30", Unmaintained: true},
+		},
+	},
+	{
+		// tigera/docs calico_versioned_docs/version-3.3x/_includes/partials/
+		// _system-requirements.mdx, "Supported versions", read 2026-10-22:
+		// "We test Calico <version> against the following Kubernetes
+		// versions. Other versions may work, but we are not actively testing
+		// them." Only 3.31-3.33 have versioned docs; no EOL policy is
+		// published there, so nothing is marked unmaintained.
+		Name:   "Calico",
+		Image:  "calico/node",
+		Source: "https://docs.tigera.io/calico/latest/getting-started/kubernetes/requirements",
+		Claim:  "is tested against",
+		Releases: []AddonRelease{
+			{Minor: "3.33", MinKube: "1.35", MaxKube: "1.37"},
+			{Minor: "3.32", MinKube: "1.34", MaxKube: "1.36"},
+			{Minor: "3.31", MinKube: "1.32", MaxKube: "1.35"},
 		},
 	},
 }
