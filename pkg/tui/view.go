@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/Rusty-Gopher/kupre/pkg/analyzer"
+	"github.com/Rusty-Gopher/kupre/pkg/deprecation"
 	"github.com/Rusty-Gopher/kupre/pkg/provider"
 )
 
@@ -234,7 +235,8 @@ func (m Model) viewTargetVersion() string {
 
 	input := m.versionBuf
 	if input == "" {
-		input = m.styles.Subtle.Render("1.36.0")
+		// The newest release kupre has verified data for is the most useful hint.
+		input = m.styles.Subtle.Render(deprecation.DataHorizon + ".0")
 	} else {
 		input = m.styles.Input.Render(input)
 	}

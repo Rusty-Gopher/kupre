@@ -414,17 +414,14 @@ func checkIngressNginxRetired(ctx context.Context, c *Cluster, _ Upgrade) (*Resu
 	sortResources(served)
 	affected := append(append(controllers, classResources...), served...)
 
-	return Warn("ingress-nginx is in use (%d controller pod(s), %d IngressClass(es), %d Ingress(es) served) - the project was retired in March 2026",
+	return Warn("ingress-nginx is in use (%d controller pod(s), %d IngressClass(es), %d Ingress(es)); "+
+		"it was retired in March 2026 and gets no more security patches",
 		len(controllers), len(classResources), len(served)).
 		WithResources(affected...).
-		WithRemediation("The Kubernetes project retired ingress-nginx in March 2026: \"There will " +
-			"be no more releases for bug fixes, security patches, or any updates of any kind after " +
-			"the project is retired.\" Existing deployments keep working, which is the trap - " +
-			"\"unless you proactively check, you may not know you are affected until you are " +
-			"compromised\" - and per the statement, \"choosing to remain with Ingress NGINX after " +
-			"its retirement leaves you and your users vulnerable to attack.\" Migrate to a Gateway " +
-			"API implementation or another actively maintained Ingress controller; the Ingress " +
-			"objects listed above are the routes that migration has to cover.").
+		WithRemediation("Upstream retired ingress-nginx in March 2026: \"no more releases for bug " +
+			"fixes, security patches, or any updates of any kind\". It keeps working, so the " +
+			"exposure is silent. Migrate to a Gateway API implementation or another maintained " +
+			"Ingress controller; the Ingresses listed above are the routes to cover.").
 		WithCommands("kubectl get pods --all-namespaces --selector app.kubernetes.io/name=ingress-nginx").
 		WithDocs(ingressNginxStatementURL), nil
 }

@@ -197,8 +197,12 @@ func writeCollapsed(w io.Writer, c colorizer, g analyzer.BucketGroup, mission st
 func writeAccepted(w io.Writer, c colorizer, g analyzer.BucketGroup, mission string) {
 	fmt.Fprintf(w, "\n%s %s\n", c.bold(g.Bucket.TitleFor(mission)),
 		c.dim(fmt.Sprintf("(%d)", len(g.Findings))))
+	width := 0
 	for _, f := range g.Findings {
-		fmt.Fprintf(w, "  %s %s\n", f.Check, c.dim(policyLines(f)[0]))
+		width = max(width, len(f.Check))
+	}
+	for _, f := range g.Findings {
+		fmt.Fprintf(w, "  %-*s  %s\n", width, f.Check, c.dim(policyLines(f)[0]))
 	}
 	fmt.Fprintln(w)
 }
