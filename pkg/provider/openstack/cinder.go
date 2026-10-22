@@ -49,9 +49,14 @@ func cinderChecks() []analyzer.Check {
 		{
 			Name:        "openstack-cinder-intree-migration",
 			Description: "No workloads remain on the removed in-tree Cinder volume plugin",
-			Category:    analyzer.CategoryCloud,
-			Severity:    analyzer.SeverityError,
-			Run:         checkCinderInTreeMigration,
+			Evidence: "Scans StorageClasses, PersistentVolumes and pod volumes for in-tree " +
+				"kubernetes.io/cinder usage, and joins with CSIDriver registration to tell " +
+				"whether the CSI translation shim can still carry what it finds.",
+			Limits: "A CSIDriver object is a cluster-level declaration only; per-node health " +
+				"of the driver is covered by openstack-cinder-csi-health.",
+			Category: analyzer.CategoryCloud,
+			Severity: analyzer.SeverityError,
+			Run:      checkCinderInTreeMigration,
 		},
 		{
 			Name:        "openstack-cinder-inline-ephemeral",
@@ -166,10 +171,12 @@ func componentLabel(image string) string {
 // checkCinderCSIVersion compares the deployed cloud-provider-openstack
 // component versions against the target Kubernetes release.
 //
-// A driver that trails the control plane by more than one minor release is the
-// most common OpenStack upgrade failure: the newer kubelet negotiates CSI
-// features the older driver does not implement, and volume attach starts failing
-// only after nodes are already being replaced.
+// The CPO <-> Kubernetes pairing is convention, not published compatibility:
+// each CPO vX.Y release pins k8s.io/kubernetes vX.Y in its go.mod, and there
+// is no compatibility matrix or supported skew window anywhere upstream
+// (docs/compatibility-matrix.md 404s). kupre therefore reports the observed
+// version drift and the absence of any guarantee, and does not invent an
+// "unsupported" verdict upstream never issued.
 func checkCinderCSIVersion(ctx context.Context, c *analyzer.Cluster, up analyzer.Upgrade) (*analyzer.Result, error) {
 	comps, err := findComponents(ctx, c)
 	if err != nil {
@@ -214,11 +221,12 @@ func checkCinderCSIVersion(ctx context.Context, c *analyzer.Cluster, up analyzer
 		WithResources(append(lagging, unknown...)...).
 		WithRemediation(
 			"cloud-provider-openstack releases track Kubernetes minor versions one-for-one: the "+
-				"v%s line targets Kubernetes %s. Upstream publishes no supported-skew window, so "+
-				"a mismatch is unsupported rather than merely risky. Upgrade these components to "+
-				"the v%s line before or alongside the control plane. A CSI driver behind the "+
-				"kubelet risks volume attach and mount failures that surface only once nodes are "+
-				"being replaced.",
+				"v%s line targets Kubernetes %s. That pairing is inferred from each release's "+
+				"go.mod pin - upstream publishes no compatibility matrix and guarantees no skew "+
+				"window - so nothing vouches for a mismatched pairing either way. Upgrade these "+
+				"components to the v%s line before or alongside the control plane. A CSI driver "+
+				"behind the kubelet risks volume attach and mount failures that surface only "+
+				"once nodes are being replaced.",
 			up.To.MinorString(), up.To.MinorString(), up.To.MinorString()).
 		WithDocs("https://github.com/kubernetes/cloud-provider-openstack/blob/master/docs/cinder-csi-plugin/using-cinder-csi-plugin.md"), nil
 }
@@ -279,6 +287,14 @@ func checkCinderCSIHealth(ctx context.Context, c *analyzer.Cluster, _ analyzer.U
 
 // checkCinderInTreeMigration verifies nothing still depends on the in-tree
 // Cinder volume plugin, which was removed from Kubernetes in 1.26.
+//
+// The removal did NOT take the CSI translation shim with it: legacy
+// kubernetes.io/cinder StorageClasses and Cinder PV sources still translate to
+// cinder.csi.openstack.org, provided that CSI driver is installed (verified
+// 2026-07-21, see CLAUDE.md "OpenStack / cloud-provider-openstack"). So the
+// evidenced breakage is conditional: with the driver registered these objects
+// keep working through translation (warn - migrate deliberately); without it
+// they cannot provision or mount at all (fail).
 func checkCinderInTreeMigration(ctx context.Context, c *analyzer.Cluster, _ analyzer.Upgrade) (*analyzer.Result, error) {
 	var affected []analyzer.AffectedResource
 
@@ -326,11 +342,38 @@ func checkCinderInTreeMigration(ctx context.Context, c *analyzer.Cluster, _ anal
 	if len(affected) == 0 {
 		return analyzer.Pass("no in-tree Cinder volume usage; fully migrated to the CSI driver"), nil
 	}
-	return analyzer.Fail("%d object(s) still use the removed in-tree Cinder volume plugin", len(affected)).
+
+	drivers, err := c.CSIDrivers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	driverInstalled := false
+	for _, d := range drivers {
+		if d.Name == "cinder.csi.openstack.org" {
+			driverInstalled = true
+			break
+		}
+	}
+
+	if driverInstalled {
+		return analyzer.Warn("%d object(s) still reference the in-tree Cinder plugin - they work "+
+			"only through the CSI translation shim", len(affected)).
+			WithResources(affected...).
+			WithRemediation("Kubernetes removed the in-tree Cinder plugin in 1.26; these objects " +
+				"keep working only because the CSI translation shim rewrites them to " +
+				"cinder.csi.openstack.org, which is installed here. That dependency is invisible " +
+				"in the objects themselves. Recreate the StorageClass with provisioner " +
+				"cinder.csi.openstack.org and migrate the volumes so nothing rests on translation.").
+			WithDocs("https://github.com/kubernetes/cloud-provider-openstack/blob/master/docs/cinder-csi-plugin/using-cinder-csi-plugin.md"), nil
+	}
+	return analyzer.Fail("%d object(s) use the in-tree Cinder plugin and the Cinder CSI driver "+
+		"is not installed", len(affected)).
 		WithResources(affected...).
-		WithRemediation("The in-tree Cinder plugin was removed in Kubernetes 1.26. These objects " +
-			"cannot provision or mount volumes. Recreate the StorageClass with provisioner " +
-			"cinder.csi.openstack.org and migrate the affected volumes.").
+		WithRemediation("The in-tree Cinder plugin was removed in Kubernetes 1.26, and translating " +
+			"the legacy objects to CSI requires the cinder.csi.openstack.org driver, which is not " +
+			"registered on this cluster. These objects cannot provision or mount volumes. Install " +
+			"the Cinder CSI driver, recreate the StorageClass with provisioner " +
+			"cinder.csi.openstack.org, and migrate the affected volumes.").
 		WithDocs("https://github.com/kubernetes/cloud-provider-openstack/blob/master/docs/cinder-csi-plugin/using-cinder-csi-plugin.md"), nil
 }
 

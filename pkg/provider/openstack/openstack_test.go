@@ -2,9 +2,11 @@ package openstack
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/Rusty-Gopher/kupre/pkg/analyzer"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -259,5 +261,95 @@ func TestCheckNodeProviderIDs(t *testing.T) {
 				t.Errorf("resources = %d, want %d", len(got.Resources), tt.wantCount)
 			}
 		})
+	}
+}
+
+// TestCheckCinderInTreeMigration guards the translation-shim distinction: the
+// in-tree plugin's removal in 1.26 did not remove the CSI translation shim
+// (verified fact, see CLAUDE.md), so legacy objects are a blocker only when
+// the cinder.csi.openstack.org driver is absent.
+func TestCheckCinderInTreeMigration(t *testing.T) {
+	intreeSC := &storagev1.StorageClass{
+		ObjectMeta:  metav1.ObjectMeta{Name: "legacy-cinder"},
+		Provisioner: "kubernetes.io/cinder",
+	}
+	cinderDriver := &storagev1.CSIDriver{
+		ObjectMeta: metav1.ObjectMeta{Name: "cinder.csi.openstack.org"},
+	}
+
+	tests := []struct {
+		name       string
+		objs       []runtime.Object
+		wantStatus analyzer.Status
+		wantCount  int
+	}{
+		{name: "no in-tree usage passes", objs: []runtime.Object{cinderDriver}, wantStatus: analyzer.StatusPass},
+		{
+			name: "in-tree usage with the CSI driver installed warns (translation shim carries it)",
+			objs: []runtime.Object{intreeSC, cinderDriver}, wantStatus: analyzer.StatusWarn, wantCount: 1,
+		},
+		{
+			name: "in-tree usage without the CSI driver is blocking",
+			objs: []runtime.Object{intreeSC}, wantStatus: analyzer.StatusFail, wantCount: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testCluster(tt.objs...)
+			up := analyzer.Upgrade{
+				From: analyzer.MustParseVersion("1.35.3"),
+				To:   analyzer.MustParseVersion("1.36.0"),
+			}
+
+			got, err := checkCinderInTreeMigration(context.Background(), c, up)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Status != tt.wantStatus {
+				t.Errorf("status = %v, want %v (message: %s)", got.Status, tt.wantStatus, got.Message)
+			}
+			if len(got.Resources) != tt.wantCount {
+				t.Errorf("resources = %d, want %d", len(got.Resources), tt.wantCount)
+			}
+		})
+	}
+}
+
+// TestCinderVersionWordingDoesNotInventSupportClaims pins the verified rule:
+// there is no published CPO compatibility matrix, so findings must report the
+// observed drift and the absence of a guarantee - never an "unsupported"
+// verdict upstream does not issue.
+func TestCinderVersionWordingDoesNotInventSupportClaims(t *testing.T) {
+	lagging := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "csi-cinder-controller", Namespace: "kube-system"},
+		Spec: appsv1.DeploymentSpec{
+			Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{
+				Name:  "cinder-csi-plugin",
+				Image: "registry.k8s.io/provider-os/cinder-csi-plugin:v1.33.1",
+			}}}},
+		},
+	}
+	c := testCluster(lagging)
+	up := analyzer.Upgrade{
+		From: analyzer.MustParseVersion("1.35.3"),
+		To:   analyzer.MustParseVersion("1.36.0"),
+	}
+
+	got, err := checkCinderCSIVersion(context.Background(), c, up)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Status != analyzer.StatusWarn {
+		t.Fatalf("status = %v, want warn (message: %s)", got.Status, got.Message)
+	}
+	text := got.Message + " " + got.Remediation
+	if strings.Contains(text, "unsupported") {
+		t.Errorf("finding claims a support verdict upstream never published:\n%s", text)
+	}
+	for _, want := range []string{"go.mod", "no compatibility matrix"} {
+		if !strings.Contains(got.Remediation, want) {
+			t.Errorf("remediation should ground the pairing in %q; got:\n%s", want, got.Remediation)
+		}
 	}
 }

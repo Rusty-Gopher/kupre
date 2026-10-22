@@ -80,10 +80,14 @@ func (Provider) Checks() []analyzer.Check {
 			Action:      analyzer.ActionFixBeforeStart,
 			Evidence: "Joins the machine API's nodeDrainTimeout configuration with the live " +
 				"PodDisruptionBudget state. Cluster API retries a blocked eviction every 20s " +
-				"with no deadline unless nodeDrainTimeout is set.",
-			Limits: "The cluster.k8s.io (Kubermatic machine-controller) API does not expose a " +
-				"drain timeout field, so on those clusters only the PDB half of the join is " +
-				"evidence; the controller's own drain behavior is not visible.",
+				"with no deadline unless nodeDrainTimeout is set. The Kubermatic " +
+				"machine-controller (cluster.k8s.io) instead requeues blocked evictions every " +
+				"10s until its -skip-eviction-after deadline (default 2h), then deletes the " +
+				"machine without honoring the PDB (verified in its source; see check docs).",
+			Limits: "The cluster.k8s.io API does not expose a drain timeout field, and " +
+				"-skip-eviction-after is a flag on the controller process - often running in " +
+				"a management/seed cluster - so its actual value is not observable from here. " +
+				"cluster.k8s.io findings are therefore warnings for manual review, not blockers.",
 			Run: checkDrainHang,
 		},
 		{
@@ -245,19 +249,75 @@ func checkDrainHang(ctx context.Context, c *analyzer.Cluster, _ analyzer.Upgrade
 		}
 	}
 
-	legacyGroup := gvr.Group == "cluster.k8s.io"
+	return drainHangVerdict(gvr, mds, blockedPDBs), nil
+}
+
+// drainHangVerdict turns the drain-timeout/PDB join into a result.
+//
+// The two machine-API families behave differently when a PDB blocks eviction,
+// and the verdicts differ accordingly:
+//
+//   - Upstream Cluster API (cluster.x-k8s.io) retries a blocked eviction every
+//     20s with no deadline unless nodeDrainTimeout is set, so a blocked PDB
+//     hangs the rollout indefinitely. Blocking.
+//     https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/machine_deletions
+//
+//   - The Kubermatic machine-controller (cluster.k8s.io) exposes no drain
+//     timeout on the MachineDeployment, but does not hang forever either:
+//     eviction attempts are requeued every 10s, and once a Machine's deletion
+//     is older than the controller's -skip-eviction-after flag (default 2h)
+//     eviction is skipped entirely and deletion proceeds, removing pods
+//     without honoring the PDB. Verified against the controller source:
+//     https://github.com/kubermatic/machine-controller/blob/main/pkg/controller/machine/controller.go
+//     (shouldEvict: "If the deletion got triggered a few hours ago, skip eviction",
+//     eviction requeued with RequeueAfter: 10 * time.Second)
+//     https://github.com/kubermatic/machine-controller/blob/main/cmd/machine-controller/main.go
+//     (flag.DurationVar(&skipEvictionAfter, "skip-eviction-after", 2*time.Hour, ...))
+//     https://github.com/kubermatic/machine-controller/blob/main/pkg/node/eviction/eviction.go
+//     (a PDB 429 returns to the controller for retry; no deadline of its own)
+//     The flag lives on the controller process, which on managed platforms runs
+//     in a seed cluster kupre cannot see, so the actual deadline is unverifiable
+//     from here: the finding is a warning for manual review, not a blocker.
+func drainHangVerdict(gvr schema.GroupVersionResource, mds []unstructured.Unstructured, blockedPDBs int) *analyzer.Result {
+	if gvr.Group == "cluster.k8s.io" {
+		var affected []analyzer.AffectedResource
+		for _, md := range mds {
+			affected = append(affected, analyzer.AffectedResource{
+				Kind: "MachineDeployment", APIVersion: gvr.GroupVersion().String(),
+				Namespace: md.GetNamespace(), Name: md.GetName(),
+				Detail: "cluster.k8s.io exposes no drain timeout; the machine-controller retries " +
+					"blocked evictions every 10s until its -skip-eviction-after deadline " +
+					"(default 2h), then deletes the machine without honoring the PDB",
+			})
+		}
+		sortCapi(affected)
+		if blockedPDBs > 0 {
+			return analyzer.Warn("%d PDB(s) permit zero evictions - each machine replacement stalls "+
+				"until the machine-controller's skip-eviction deadline (default 2h, controller flag "+
+				"not visible from this cluster), then pods are deleted in violation of the PDB",
+				blockedPDBs).
+				WithResources(affected...).
+				WithAction(analyzer.ActionVerifyManually).
+				WithRemediation("Fix the blocking PDBs before the rollout (see pdb-blocks-drain for " +
+					"the exact commands), and confirm the machine-controller's -skip-eviction-after " +
+					"setting with your platform operator - kupre cannot read controller flags. When " +
+					"that deadline fires, pods are deleted rather than evicted, so the PDB's " +
+					"guarantee is bypassed, not honored.").
+				WithDocs("https://github.com/kubermatic/machine-controller/blob/main/pkg/controller/machine/controller.go")
+		}
+		return analyzer.Pass("no PDB currently permits zero evictions; the cluster.k8s.io " +
+			"machine-controller bounds a blocked drain with its skip-eviction deadline rather " +
+			"than hanging forever")
+	}
+
 	var unbounded []analyzer.AffectedResource
 	for _, md := range mds {
 		s := strategyOf(md)
 		if s.DrainTimeoutSeconds == nil || *s.DrainTimeoutSeconds == 0 {
-			detail := "no nodeDrainTimeout - a blocked eviction is retried forever"
-			if legacyGroup {
-				detail = "drain timeout not exposed by cluster.k8s.io; assume evictions are retried indefinitely"
-			}
 			unbounded = append(unbounded, analyzer.AffectedResource{
 				Kind: "MachineDeployment", APIVersion: gvr.GroupVersion().String(),
 				Namespace: md.GetNamespace(), Name: md.GetName(),
-				Detail: detail,
+				Detail: "no nodeDrainTimeout - a blocked eviction is retried forever",
 			})
 		}
 	}
@@ -269,12 +329,12 @@ func checkDrainHang(ctx context.Context, c *analyzer.Cluster, _ analyzer.Upgrade
 			"drain deadline - machine replacement will hang indefinitely, not just stall",
 			blockedPDBs, len(unbounded)).
 			WithResources(unbounded...).
-			WithRemediation("The machine controller retries blocked evictions forever without a " +
+			WithRemediation("Cluster API retries blocked evictions forever without a " +
 				"drain timeout, so the first affected node parks the whole rollout. Fix the " +
 				"blocking PDBs (see pdb-blocks-drain for the exact commands), or set a " +
 				"nodeDrainTimeout as a backstop - noting that a timeout means pods are killed " +
 				"rather than evicted when it fires.").
-			WithDocs("https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/machine_deletions"), nil
+			WithDocs("https://cluster-api.sigs.k8s.io/tasks/automated-machine-management/machine_deletions")
 	case len(unbounded) > 0:
 		sortCapi(unbounded)
 		return analyzer.Warn("%d MachineDeployment(s) have no drain deadline (no PDB currently blocks, "+
@@ -282,9 +342,9 @@ func checkDrainHang(ctx context.Context, c *analyzer.Cluster, _ analyzer.Upgrade
 			WithResources(unbounded...).
 			WithRemediation("Consider a nodeDrainTimeout as a backstop against PDBs that tighten " +
 				"during the rollout - e.g. a single-replica workload whose pod lands on the next " +
-				"node to drain."), nil
+				"node to drain.")
 	default:
-		return analyzer.Pass("every MachineDeployment bounds its node drain with a timeout"), nil
+		return analyzer.Pass("every MachineDeployment bounds its node drain with a timeout")
 	}
 }
 
