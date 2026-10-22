@@ -1,62 +1,107 @@
 package deprecation
 
-// AddonRelease is one minor release of a cluster add-on with the Kubernetes
-// range its vendor publishes support for. Only vendor-published matrices go
-// here: an inferred compatibility claim is worse than none.
+// Add-on support data. Only vendor-published matrices go here: an inferred
+// compatibility claim is worse than none.
+
+// Addon describes one add-on and the vendor's published Kubernetes matrix.
+type Addon struct {
+	// Name is how reports refer to the add-on.
+	Name string
+	// Image is the final path segments of the image that identifies the
+	// add-on and carries its version tag, e.g. "jetstack/cert-manager-controller".
+	Image string
+	// Source is the vendor page the data comes from.
+	Source string
+	// Claim is the vendor's own word for the range: "supports" or "is tested
+	// against". Reports use it so kupre never overstates the vendor.
+	Claim string
+	// Releases is newest first.
+	Releases []AddonRelease
+}
+
+// AddonRelease is one minor release with the Kubernetes range the vendor
+// publishes for it.
 type AddonRelease struct {
-	Minor string // e.g. "1.21"
-	// MinKube and MaxKube bound the supported Kubernetes minors, inclusive.
+	Minor string
+	// MinKube and MaxKube bound the published Kubernetes minors, inclusive.
 	MinKube, MaxKube string
-	// EOL is the end-of-life date (YYYY-MM-DD), or "" while still supported.
-	EOL string
+	// EOL is the end-of-life date (YYYY-MM-DD) when the vendor publishes
+	// one; Unmaintained marks a release dropped from the maintained list
+	// without a published date.
+	EOL          string
+	Unmaintained bool
 }
 
-// CertManagerSource is the vendor's supported-releases page.
-const CertManagerSource = "https://cert-manager.io/docs/releases/"
-
-// certManagerReleases is the "Supported Kubernetes" column of cert-manager's
-// supported-releases page (cert-manager/website content/docs/releases/
-// README.md), read 2026-10-22. 1.22 is announced for ~Nov 2026 with TBD
-// support and is deliberately absent.
-var certManagerReleases = []AddonRelease{
-	{Minor: "1.21", MinKube: "1.33", MaxKube: "1.36"},
-	{Minor: "1.20", MinKube: "1.32", MaxKube: "1.35"},
-	{Minor: "1.19", MinKube: "1.31", MaxKube: "1.35", EOL: "2026-07-08"},
-	{Minor: "1.18", MinKube: "1.29", MaxKube: "1.33", EOL: "2026-03-10"},
-	{Minor: "1.17", MinKube: "1.29", MaxKube: "1.33", EOL: "2025-10-07"},
-	{Minor: "1.16", MinKube: "1.25", MaxKube: "1.32", EOL: "2025-06-10"},
-	{Minor: "1.15", MinKube: "1.25", MaxKube: "1.32", EOL: "2025-02-03"},
-	{Minor: "1.14", MinKube: "1.24", MaxKube: "1.31", EOL: "2024-10-03"},
-	{Minor: "1.13", MinKube: "1.21", MaxKube: "1.27", EOL: "2024-06-05"},
-	{Minor: "1.12", MinKube: "1.22", MaxKube: "1.32", EOL: "2025-05-19"},
+// Addons lists every add-on kupre knows a published matrix for.
+var Addons = []Addon{
+	{
+		// cert-manager/website content/docs/releases/README.md, read
+		// 2026-10-22. 1.22 (~Nov 2026, support TBD) is deliberately absent.
+		Name:   "cert-manager",
+		Image:  "cert-manager-controller",
+		Source: "https://cert-manager.io/docs/releases/",
+		Claim:  "supports",
+		Releases: []AddonRelease{
+			{Minor: "1.21", MinKube: "1.33", MaxKube: "1.36"},
+			{Minor: "1.20", MinKube: "1.32", MaxKube: "1.35"},
+			{Minor: "1.19", MinKube: "1.31", MaxKube: "1.35", EOL: "2026-07-08"},
+			{Minor: "1.18", MinKube: "1.29", MaxKube: "1.33", EOL: "2026-03-10"},
+			{Minor: "1.17", MinKube: "1.29", MaxKube: "1.33", EOL: "2025-10-07"},
+			{Minor: "1.16", MinKube: "1.25", MaxKube: "1.32", EOL: "2025-06-10"},
+			{Minor: "1.15", MinKube: "1.25", MaxKube: "1.32", EOL: "2025-02-03"},
+			{Minor: "1.14", MinKube: "1.24", MaxKube: "1.31", EOL: "2024-10-03"},
+			{Minor: "1.13", MinKube: "1.21", MaxKube: "1.27", EOL: "2024-06-05"},
+			{Minor: "1.12", MinKube: "1.22", MaxKube: "1.32", EOL: "2025-05-19"},
+		},
+	},
+	{
+		// Documentation/network/kubernetes/compatibility.rst on each
+		// cilium/cilium release branch, and the maintained "Stable Releases"
+		// in its README.rst (v1.18-v1.20), read 2026-10-22. Cilium's wording:
+		// listed versions are "e2e tested and guaranteed to be compatible";
+		// others "depend on the forward / backward compatibility" of
+		// Kubernetes. So outside the list is untested, not unsupported.
+		Name:   "Cilium",
+		Image:  "cilium/cilium",
+		Source: "https://docs.cilium.io/en/stable/network/kubernetes/compatibility/",
+		Claim:  "is e2e tested against",
+		Releases: []AddonRelease{
+			{Minor: "1.20", MinKube: "1.33", MaxKube: "1.36"},
+			{Minor: "1.19", MinKube: "1.32", MaxKube: "1.35"},
+			{Minor: "1.18", MinKube: "1.30", MaxKube: "1.33"},
+			{Minor: "1.17", MinKube: "1.29", MaxKube: "1.32", Unmaintained: true},
+			{Minor: "1.16", MinKube: "1.27", MaxKube: "1.30", Unmaintained: true},
+		},
+	},
 }
 
-// CertManagerRelease looks up a cert-manager minor. known is false for
-// releases newer than the data; older than the data means long past EOL.
-func CertManagerRelease(minor string) (rel AddonRelease, known, olderThanData bool) {
-	for _, r := range certManagerReleases {
+// Release looks up a minor. known is false for releases outside the data;
+// olderThanData then says whether it predates every listed release.
+func (a Addon) Release(minor string) (rel AddonRelease, known, olderThanData bool) {
+	for _, r := range a.Releases {
 		if r.Minor == minor {
 			return r, true, false
 		}
 	}
-	oMaj, oMin, _ := splitMinor("1.12")
+	oldest := a.Releases[len(a.Releases)-1].Minor
+	oMaj, oMin, _ := splitMinor(oldest)
 	vMaj, vMin, ok := splitMinor(minor)
 	return AddonRelease{}, false, ok && after(oMaj, oMin, vMaj, vMin)
 }
 
-// CertManagerReleaseSupporting returns the newest listed cert-manager minor
-// whose support range includes kube, or "" when none does yet.
-func CertManagerReleaseSupporting(kube string) string {
-	for _, r := range certManagerReleases { // newest first
-		if r.EOL == "" && minorWithin(kube, r.MinKube, r.MaxKube) {
+// NewestCovering returns the newest maintained release whose published range
+// includes kube, or "" when none does yet.
+func (a Addon) NewestCovering(kube string) string {
+	for _, r := range a.Releases {
+		if r.EOL == "" && !r.Unmaintained && r.Covers(kube) {
 			return r.Minor
 		}
 	}
 	return ""
 }
 
-// Supports reports whether the release's published range includes kube.
-func (r AddonRelease) Supports(kube string) bool { return minorWithin(kube, r.MinKube, r.MaxKube) }
+// Covers reports whether the release's published range includes kube.
+func (r AddonRelease) Covers(kube string) bool { return minorWithin(kube, r.MinKube, r.MaxKube) }
 
 func minorWithin(v, lo, hi string) bool {
 	vM, vm, ok1 := splitMinor(v)
