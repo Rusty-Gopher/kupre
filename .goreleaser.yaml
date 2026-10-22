@@ -57,5 +57,25 @@ release:
   prerelease: auto
   draft: true # first releases deserve hand-written notes; publish after editing
 
-# Deferred to a later release on purpose: homebrew_casks, dockers_v2, krew.
-# Each is additive and non-breaking to introduce later.
+# Multi-arch image for in-cluster use (CronJob, Argo, Tekton). Distroless,
+# non-root; the binary is the same one shipped in the archives.
+dockers_v2:
+  - images:
+      - ghcr.io/rusty-gopher/kupre
+    tags:
+      - "{{ .Version }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    sbom: true
+    labels:
+      org.opencontainers.image.title: kupre
+      org.opencontainers.image.description: Kubernetes upgrade preflight, health check and certificate audit
+      org.opencontainers.image.source: https://github.com/Rusty-Gopher/kupre
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: MIT
+
+# Deferred: homebrew_casks and krew need a tap repository and a token with
+# access to it; see reference/launch/.

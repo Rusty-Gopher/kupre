@@ -1,0 +1,39 @@
+# Nightly in-cluster health check and certificate audit.
+#
+# Uses the read-only kupre ServiceAccount and ClusterRole from rbac.yaml:
+#   kubectl apply -f deploy/rbac.yaml -f deploy/cronjob.yaml
+#
+# Results go to the pod log as JSON, one report per run, for whatever log
+# pipeline you already alert from. A non-zero exit marks the Job failed:
+# 1 blocking, 2 warnings only, 3 the scan could not complete.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kupre-health
+  namespace: kube-system
+spec:
+  schedule: "17 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          serviceAccountName: kupre
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: kupre
+              image: ghcr.io/rusty-gopher/kupre:latest
+              args: ["health", "-o", "json", "--max-resources", "-1"]
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+                limits: {memory: 256Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
