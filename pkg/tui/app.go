@@ -38,6 +38,9 @@ type Options struct {
 	Context string
 	// TargetVersion preselects the upgrade target, skipping the prompt.
 	TargetVersion string
+	// Finalize, when set, adjusts each finished report before it is shown or
+	// saved; the CLI uses it to apply the same .kupre.yaml policy as scripts.
+	Finalize func(*analyzer.Report)
 }
 
 // Model is the top-level Bubble Tea model.
@@ -666,6 +669,7 @@ func (m *Model) startScan() tea.Cmd {
 	m.done = make(chan scanDoneMsg, 1)
 	updates, done := m.updates, m.done
 	missionName := m.mission.Name
+	finalize := m.opts.Finalize
 
 	saveReport := func(rep *analyzer.Report) (string, error) {
 		path := fmt.Sprintf("kupre-%s-report.html", missionName)
@@ -698,6 +702,9 @@ func (m *Model) startScan() tea.Cmd {
 		})
 		rep.Mission = missionName
 		rep.Errors = append(rep.Errors, detectFailures...)
+		if finalize != nil {
+			finalize(rep)
+		}
 		path, perr := saveReport(rep)
 		done <- scanDoneMsg{report: rep, reportPath: path, reportErr: perr}
 	}()

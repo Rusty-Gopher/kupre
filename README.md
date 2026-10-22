@@ -90,6 +90,7 @@ kupre health                            # what is broken right now, and why
 kupre certs                             # every certificate kupre can see, and when it expires
 kupre fleet --target-version 1.37.0     # every context in your kubeconfig
 kupre checks -v                         # all 61 checks, no cluster needed
+source <(kupre completion bash)         # or zsh, fish, powershell
 ```
 
 The only input is a kubeconfig. kupre works with any cluster it can reach:
