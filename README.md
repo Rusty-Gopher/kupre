@@ -50,8 +50,8 @@ START NOW: these need lead time
   removed APIs (live objects *and* Helm release history), drain blockers,
   webhooks, version skew, CoreDNS migration, kubelet and feature-gate
   breakage, end-of-life dates, add-on support matrices (cert-manager),
-  certificates, and provider-specific hazards
-  for kubeadm, Cluster API and OpenStack.
+  certificates, and provider-specific hazards for kubeadm, Cluster API and
+  OpenStack.
 - **Release data that keeps up.** Kubernetes 1.37 data shipped with every
   entry checked against the upstream changelog. A target beyond kupre's data
   is reported as *unknown*, never as clean.
