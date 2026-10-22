@@ -100,6 +100,10 @@ jobs:
   # Exercises action.yml exactly as users call it, against a kind cluster.
   action:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # source: this commit's code. latest: the published release download.
+        install: [source, latest]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -110,12 +114,12 @@ jobs:
         with:
           version: v0.32.0
           node_image: kindest/node:v1.36.4
-          cluster_name: kupre-action
+          cluster_name: kupre-action-${{ matrix.install }}
           wait: 180s
       - id: kupre
         uses: ./
         with:
-          version: source
+          version: ${{ matrix.install }}
           target-version: 1.37.0
           fail-on: never
       - name: Outputs are set

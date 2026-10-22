@@ -5,12 +5,27 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime/debug"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 // version is the kupre release, overridable at build time via -ldflags.
 var version = "dev"
+
+// go install builds carry no ldflags, but the module version is recorded in
+// the binary's build info; use it so `go install ...@v0.2.1` reports 0.2.1.
+func init() {
+	if version != "dev" {
+		return
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		if v := bi.Main.Version; v != "" && v != "(devel)" {
+			version = strings.TrimPrefix(v, "v")
+		}
+	}
+}
 
 // globalFlags holds options shared by every subcommand.
 type globalFlags struct {
