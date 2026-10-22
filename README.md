@@ -140,8 +140,13 @@ The action writes the report to the job summary and sets `verdict`,
 `-o table` (the worklist) · `flat` · `json` · `markdown` · `html`.
 `--json-file report.json` also saves the full JSON report, whatever format
 goes to stdout. Each finding carries `durationMs`, so slow checks on big
-clusters are easy to spot. The JSON carries `schemaVersion`. Fields may be added within
-a version; any rename or removal bumps it.
+clusters are easy to spot. The JSON carries `schemaVersion`.
+
+**Stability contract.** Within a `schemaVersion`, kupre never renames or
+removes JSON fields, and never changes exit codes, status values (`pass`
+`warn` `fail` `skip`), verdicts (`ready` `warnings` `blocked`
+`inconclusive`) or bucket names. New fields and new checks can appear at any
+time. A test pins all of this, so a breaking change can't ship by accident.
 
 ### Policy: waivers, overrides, baselines
 
