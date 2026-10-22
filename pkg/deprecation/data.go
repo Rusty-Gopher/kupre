@@ -136,6 +136,20 @@ var removals = []APIRemoval{
 		DeprecatedIn: "1.35", RemovedIn: "1.36",
 		ReplacementGroup: "scheduling.k8s.io", ReplacementVersion: "v1alpha2",
 		Notes: "replaced by v1alpha2 Workload plus the new PodGroup resource"},
+
+	// ---- 1.37 ----
+	// CHANGELOG-1.37 (v1.37.0): "Promoted the core Workload-Aware Scheduling
+	// (WAS) API types Workload and PodGroup to scheduling.k8s.io/v1beta1.
+	// Remove all v1alpha2 objects from the kube-apiserver before upgrading
+	// from v1.36 to v1.37."
+	{Group: "scheduling.k8s.io", Version: "v1alpha2", Kind: "Workload", Resource: "workloads",
+		DeprecatedIn: "1.37", RemovedIn: "1.37",
+		ReplacementGroup: "scheduling.k8s.io", ReplacementVersion: "v1beta1",
+		Notes: "ACTION REQUIRED: delete all v1alpha2 objects before upgrading"},
+	{Group: "scheduling.k8s.io", Version: "v1alpha2", Kind: "PodGroup", Resource: "podgroups",
+		DeprecatedIn: "1.37", RemovedIn: "1.37",
+		ReplacementGroup: "scheduling.k8s.io", ReplacementVersion: "v1beta1",
+		Notes: "ACTION REQUIRED: delete all v1alpha2 objects before upgrading"},
 }
 
 // NOTE ON FORWARD-LOOKING DATA
@@ -225,8 +239,8 @@ func after(aMaj, aMin, bMaj, bMin int) bool {
 //
 // When adding data for a new release, bump both of these in the same commit.
 const (
-	DataHorizon         = "1.36"
-	DataHorizonVerified = "2026-07-21"
+	DataHorizon         = "1.37"
+	DataHorizonVerified = "2026-10-22"
 )
 
 // BeyondHorizon reports whether the given release is newer than the data this

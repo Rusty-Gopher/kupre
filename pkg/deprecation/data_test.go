@@ -24,6 +24,14 @@ func TestRemovedBetween(t *testing.T) {
 			wantGVK:   "scheduling.k8s.io/v1alpha1 Workload",
 		},
 		{
+			name: "1.36 to 1.37 finds the scheduling v1alpha2 removal",
+			// CHANGELOG-1.37: Workload and PodGroup promoted to v1beta1;
+			// "Remove all v1alpha2 objects ... before upgrading".
+			from: "1.36", to: "1.37",
+			wantCount: 2,
+			wantGVK:   "scheduling.k8s.io/v1alpha2 PodGroup",
+		},
+		{
 			name: "1.31 to 1.32 finds the flowcontrol v1beta3 removal",
 			from: "1.31", to: "1.32",
 			wantCount: 2,
@@ -210,4 +218,43 @@ func lower(s string) string {
 		}
 	}
 	return string(b)
+}
+
+// TestRelease137Facts pins the 1.37 data to CHANGELOG-1.37 (v1.37.0) and
+// kubeadm's constants at the v1.37.0 tag, both read 2026-10-22.
+func TestRelease137Facts(t *testing.T) {
+	ids := map[string]bool{}
+	for _, bc := range BreakingChangesBetween("1.36", "1.37") {
+		ids[bc.ID] = true
+	}
+	for _, want := range []string{
+		"selinux-mount-ga", "kubelet-event-qps-zero-unlimited", "kubelet-cadvisor-flags-removed",
+		"static-pod-api-references-prohibited", "kubeadm-v1beta3-removed", "removed-feature-gates-137",
+	} {
+		if !ids[want] {
+			t.Errorf("1.36 -> 1.37 is missing breaking change %q", want)
+		}
+	}
+	if ids["cgroup-v1-fails-closed"] {
+		t.Error("cgroup-v1-fails-closed belongs to 1.35, not the 1.36 -> 1.37 path")
+	}
+
+	rc, ok := ComponentsFor("1.37")
+	if !ok {
+		t.Fatal("no kubeadm component data for 1.37")
+	}
+	if rc.EtcdVersion != "3.7.0-0" || rc.CoreDNSVersion != "v1.14.6" || rc.MinExternalEtcdVersion != "3.5.24-0" {
+		t.Errorf("1.37 components = %+v, want etcd 3.7.0-0, CoreDNS v1.14.6, min external etcd 3.5.24-0", rc)
+	}
+
+	gates := map[string]bool{}
+	for _, g := range FeatureGatesRemovedBetween("1.36", "1.37") {
+		gates[g.Name] = true
+	}
+	if !gates["SidecarContainers"] || !gates["ConsistentListFromCache"] {
+		t.Errorf("1.37 removed gates incomplete: %v", gates)
+	}
+	if BeyondHorizon("1.37") {
+		t.Error("1.37 data is present, so 1.37 must be inside the data horizon")
+	}
 }

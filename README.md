@@ -100,7 +100,7 @@ kupre checks -v                        # list all checks, no cluster needed
 
 kubent, Pluto and kubepug answer one question: which deprecated APIs are in
 use. Popeye lints cluster health. kupre's job is the whole pre-upgrade
-question — deprecated APIs are four of its 48 checks; the rest cover what
+question — deprecated APIs are four of its 51 checks; the rest cover what
 actually breaks upgrades: PDBs that block node drains, fail-closed webhooks on
 single-replica backends, kubelet version skew, expiring certificates, CoreDNS
 config migration, and provider-specific hazards (kubeadm, Cluster API,
@@ -114,7 +114,7 @@ OpenStack).
 | Certificate expiry audit | yes | no | no | no | no |
 | Health mission | yes | no | no | no | yes |
 | Target-version preflight verdict | yes | no | no | yes | no |
-| Deprecation data current | 1.36 | frozen at 1.32, unmaintained since Jan 2025 | current | current | n/a |
+| Deprecation data current | 1.37 | frozen at 1.32, unmaintained since Jan 2025 | current | current | n/a |
 
 Two honest boundaries: scanning rendered manifests in CI *before* they reach a
 cluster is Pluto's territory — kupre reads only live clusters. And no

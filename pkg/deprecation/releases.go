@@ -28,6 +28,7 @@ type BreakingChange struct {
 const (
 	changelog135 = "https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.35.md"
 	changelog136 = "https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.36.md"
+	changelog137 = "https://github.com/kubernetes/kubernetes/blob/master/CHANGELOG/CHANGELOG-1.37.md"
 )
 
 // breakingChanges lists non-API breaking changes by release.
@@ -172,6 +173,115 @@ var breakingChanges = []BreakingChange{
 		Remediation:  "Plan a migration to LoadBalancer or Ingress for these Services.",
 		Detectable:   true,
 		Docs:         changelog136,
+	},
+
+	// ---- 1.37 ----
+	// All entries verified 2026-10-22 against the v1.37.0 section of
+	// CHANGELOG-1.37; quotes are verbatim from it.
+	{
+		// Urgent Upgrade Notes: "ACTION REQUIRED: Graduated the SELinuxMount
+		// feature gate to GA. The feature is enabled by default in v1.37, which
+		// may break existing workloads in clusters with SELinux enabled."
+		ReleaseMinor: "1.37",
+		ID:           "selinux-mount-ga",
+		Title:        "SELinuxMount enabled by default; may break workloads on SELinux nodes",
+		Detail: "Volumes are now mounted with the Pod's SELinux label instead of being " +
+			"relabelled recursively. Pods sharing a volume with different SELinux labels, or " +
+			"privileged and unprivileged Pods sharing a volume, can fail to start. Clusters whose " +
+			"nodes do not run SELinux are unaffected.",
+		Remediation: "On SELinux-enabled nodes, find affected workloads on the 1.36 cluster first " +
+			"(see kubernetes.io/blog/2026/04/22/breaking-changes-in-selinux-volume-labeling/), and " +
+			"either fix them or set spec.securityContext.seLinuxChangePolicy: Recursive before upgrading.",
+		Detectable: false,
+		Docs:       "https://kubernetes.io/blog/2026/04/22/breaking-changes-in-selinux-volume-labeling/",
+	},
+	{
+		// Urgent Upgrade Notes: "ACTION REQUIRED: Fixed eventRecordQPS handling
+		// in kubelet configuration to treat 0 as unlimited (no rate limit)".
+		ReleaseMinor: "1.37",
+		ID:           "kubelet-event-qps-zero-unlimited",
+		Title:        "kubelet eventRecordQPS: 0 now means unlimited",
+		Detail: "A kubelet configured with eventRecordQPS: 0 previously fell back to the default " +
+			"rate limit; from 1.37 it emits events with no rate limit at all, which can flood the " +
+			"API server on busy nodes.",
+		Remediation: "If any kubelet configuration sets eventRecordQPS: 0, set an explicit non-zero " +
+			"value (upstream suggests 50) before upgrading kubelets.",
+		Detectable: false,
+		Docs:       changelog137,
+	},
+	{
+		// Urgent Upgrade Notes: "Updated the kubelet to log its effective
+		// configuration at startup ... restrict the nodes/logs ClusterRole to
+		// trusted users."
+		ReleaseMinor: "1.37",
+		ID:           "kubelet-logs-effective-config",
+		Title:        "kubelet logs its effective configuration at startup",
+		Detail: "Configuration details now appear in kubelet logs, readable by anyone granted " +
+			"nodes/logs.",
+		Remediation: "Review which subjects can read nodes/logs and restrict it to trusted users.",
+		Detectable:  false,
+		Docs:        changelog137,
+	},
+	{
+		// "Deprecated cAdvisor flags are no longer accepted and the kubelet will
+		// fail to start if any are set (only --housekeeping-interval is kept)".
+		ReleaseMinor: "1.37",
+		ID:           "kubelet-cadvisor-flags-removed",
+		Title:        "Deprecated cAdvisor kubelet flags removed; kubelet fails to start if set",
+		Detail: "The kubelet no longer accepts the legacy cAdvisor flags (--containerd, " +
+			"--containerd-namespace, --boot-id-file, --machine-id-file, --storage-driver-*, " +
+			"--event-storage-*, --global-housekeeping-interval and others); only " +
+			"--housekeeping-interval is kept. cAdvisor application metrics and the " +
+			"container_cpu_load_average_10s and container_tasks_state series are no longer exported.",
+		Remediation: "Remove these flags from every node's kubelet arguments before upgrading " +
+			"kubelets, and update dashboards or alerts using the dropped cAdvisor series.",
+		Detectable: false,
+		Docs:       changelog137,
+	},
+	{
+		// "Removed the PreventStaticPodAPIReferences feature gate. Static Pods
+		// can no longer reference API resources, and this behavior can no
+		// longer be disabled."
+		ReleaseMinor: "1.37",
+		ID:           "static-pod-api-references-prohibited",
+		Title:        "Static Pods can no longer reference API objects",
+		Detail: "A static Pod manifest that references a Secret, ConfigMap, ServiceAccount " +
+			"token or other API object is rejected, and the opt-out gate is gone.",
+		Remediation: "Check /etc/kubernetes/manifests (or the kubelet's staticPodPath) on every " +
+			"node and replace API references with host files before upgrading.",
+		Detectable: false,
+		Docs:       changelog137,
+	},
+	{
+		// "kubeadm: Removed the v1beta3 API which was deprecated since v1.31.
+		// The v1.35 kubeadm binary can be used to migrate to v1beta4 by using
+		// the command kubeadm config migrate."
+		ReleaseMinor: "1.37",
+		ID:           "kubeadm-v1beta3-removed",
+		Title:        "kubeadm v1beta3 configuration API removed",
+		Detail: "kubeadm 1.37 rejects kubeadm.k8s.io/v1beta3 configuration files. The " +
+			"PublicKeysECDSA kubeadm feature gate was removed with it; use " +
+			"ClusterConfiguration.encryptionAlgorithm instead.",
+		Remediation: "Migrate any kubeadm config files kept in automation (init/join/upgrade " +
+			"configs) to v1beta4 with `kubeadm config migrate` from a 1.35 or 1.36 kubeadm binary.",
+		Detectable: false,
+		Docs:       changelog137,
+	},
+	{
+		ReleaseMinor: "1.37",
+		ID:           "removed-feature-gates-137",
+		Title:        "Several feature gates removed; setting them now fails startup",
+		Detail: "SidecarContainers, AnyVolumeDataSource, RelaxedDNSSearchValidation, " +
+			"GangScheduling, WorkloadAwarePreemption, PreventStaticPodAPIReferences, " +
+			"RetryGenerateName, BtreeWatchCache, OrderedNamespaceDeletion, " +
+			"StreamingCollectionEncodingToJSON, StreamingCollectionEncodingToProtobuf, " +
+			"APIServerTracing, ResilientWatchCacheInitialization and ConsistentListFromCache were " +
+			"removed, and the kube-controller-manager --concurrent-service-syncs flag is gone. " +
+			"DeclarativeValidationTakeover, DRAPrioritizedList and HostnameOverride are locked.",
+		Remediation: "Remove these gates and the removed flag from all component configurations " +
+			"before upgrading.",
+		Detectable: false,
+		Docs:       changelog137,
 	},
 }
 
