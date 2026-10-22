@@ -8,7 +8,12 @@
   KUBERNETES PREFLIGHT & REVIEW ENGINE
 ```
 
-kupre analyzes live Kubernetes clusters, read-only. Pick a mission:
+[![CI](https://github.com/Rusty-Gopher/kupre/actions/workflows/ci.yml/badge.svg)](https://github.com/Rusty-Gopher/kupre/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Rusty-Gopher/kupre)](https://github.com/Rusty-Gopher/kupre/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+Kubernetes upgrade preflight, health check and certificate audit for live
+clusters. Read-only, single binary. Pick a mission:
 
 - **Upgrade preflight**: is this cluster ready for a target version?
 - **Health check**: what is broken right now, and why?
@@ -17,9 +22,20 @@ kupre analyzes live Kubernetes clusters, read-only. Pick a mission:
 Problems come out as a worklist, ordered by what to fix first. Every scan also
 saves a shareable HTML report next to where you ran it.
 
-## Run it
+## Install
 
-Needs Go 1.26+ and make.
+Prebuilt binaries for Linux, macOS and Windows are on the
+[releases page](https://github.com/Rusty-Gopher/kupre/releases) — download,
+unpack, run `./kupre`. Every release ships checksums, an SBOM and a build
+attestation.
+
+With Go 1.26+ installed:
+
+```bash
+go install github.com/Rusty-Gopher/kupre/cmd/kupre@latest
+```
+
+Or from source:
 
 ```bash
 git clone https://github.com/Rusty-Gopher/kupre.git
@@ -27,9 +43,11 @@ cd kupre
 make tui       # builds and starts the interactive mode
 ```
 
-Or in two steps: `make build` compiles `./kupre`, then run `./kupre`.
+`make build` compiles `./kupre` without starting it.
 
-The flow:
+## Run it
+
+Running `kupre` with no arguments starts the interactive mode:
 
 1. Intro screen. Press enter.
 2. Pick a mission.
@@ -77,6 +95,33 @@ kupre checks -v                        # list all checks, no cluster needed
   path; redirected output streams as usual.
 - Exit codes: 0 ready, 1 blocking, 2 warnings only, 3 scan failed. A failed
   scan is never reported as ready.
+
+## How it compares
+
+kubent, Pluto and kubepug answer one question: which deprecated APIs are in
+use. Popeye lints cluster health. kupre's job is the whole pre-upgrade
+question — deprecated APIs are four of its 48 checks; the rest cover what
+actually breaks upgrades: PDBs that block node drains, fail-closed webhooks on
+single-replica backends, kubelet version skew, expiring certificates, CoreDNS
+config migration, and provider-specific hazards (kubeadm, Cluster API,
+OpenStack).
+
+|  | kupre | kubent | Pluto | kubepug | Popeye |
+|---|---|---|---|---|---|
+| Deprecated APIs, live cluster | yes | yes | partial | yes | no |
+| Helm release manifests scanned | yes | yes | yes | no | no |
+| Drain blockers (PDBs), webhooks, node skew | yes | no | no | no | partial |
+| Certificate expiry audit | yes | no | no | no | no |
+| Health mission | yes | no | no | no | yes |
+| Target-version preflight verdict | yes | no | no | yes | no |
+| Deprecation data current | 1.36 | frozen at 1.32, unmaintained since Jan 2025 | current | current | n/a |
+
+Two honest boundaries: scanning rendered manifests in CI *before* they reach a
+cluster is Pluto's territory — kupre reads only live clusters. And no
+live-object scan can prove deprecated API *usage* (the API server converts
+objects on read), which is why kupre classifies evidence as confirmed versus
+unknown instead of guessing — `kupre checks -v` shows what every check
+measures and what it cannot.
 
 ## Permissions
 
