@@ -29,8 +29,8 @@ cover: ## Run tests and report coverage
 	go tool cover -func=coverage.out | tail -1
 
 .PHONY: integration
-integration: ## Run integration tests against the live test cluster
-	KUBECONFIG=$(KUBECONFIG_TEST) go test ./... -tags=integration -count=1
+integration: ## Run end-to-end tests against KUBECONFIG (a disposable cluster such as kind)
+	go test -tags=integration -count=1 -v ./test/integration/
 
 .PHONY: vet
 vet: ## Run go vet
