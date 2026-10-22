@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 )
 
 // Engine runs a set of checks against a cluster and collects the results.
@@ -108,7 +109,9 @@ func runCheck(ctx context.Context, chk Check, c *Cluster, up Upgrade) (f Finding
 		Action: chk.Action, Evidence: chk.Evidence, Limits: chk.Limits,
 	}
 
+	start := time.Now()
 	defer func() {
+		f.Duration = time.Since(start)
 		if r := recover(); r != nil {
 			f.Result = nil
 			f.Error = fmt.Sprintf("check panicked: %v", r)

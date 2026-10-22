@@ -69,6 +69,8 @@ type jsonFinding struct {
 	// accepted findings do not count toward the verdict.
 	Suppression *analyzer.Suppression `json:"suppression,omitempty"`
 	PolicyNotes []string              `json:"policyNotes,omitempty"`
+	// DurationMs is the check's wall time; see analyzer.Finding.Duration.
+	DurationMs int64 `json:"durationMs"`
 }
 
 type jsonResource struct {
@@ -160,6 +162,7 @@ func WriteJSON(w io.Writer, r *analyzer.Report, opts Options) error {
 
 			Suppression: f.Suppression,
 			PolicyNotes: f.PolicyNotes,
+			DurationMs:  f.Duration.Milliseconds(),
 		}
 		if f.Result != nil {
 			jf.Status = f.Result.Status.String()

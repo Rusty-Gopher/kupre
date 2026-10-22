@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Severity expresses how much a failing check should block an upgrade.
@@ -222,6 +223,9 @@ type Finding struct {
 	// finding. An accepted finding stays in the report, in its own section,
 	// but no longer drives the verdict or exit code.
 	Suppression *Suppression `json:"suppression,omitempty"`
+	// Duration is the check's wall time. Cluster lists are fetched once and
+	// shared, so the first check to need a list pays for fetching it.
+	Duration time.Duration `json:"-"`
 	// PolicyNotes records what policy did to this finding (severity override,
 	// expired waiver), so a changed verdict is always explained.
 	PolicyNotes []string `json:"policyNotes,omitempty"`

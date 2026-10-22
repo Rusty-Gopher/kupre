@@ -139,7 +139,8 @@ The action writes the report to the job summary and sets `verdict`,
 
 `-o table` (the worklist) · `flat` · `json` · `markdown` · `html`.
 `--json-file report.json` also saves the full JSON report, whatever format
-goes to stdout. The JSON carries `schemaVersion`. Fields may be added within
+goes to stdout. Each finding carries `durationMs`, so slow checks on big
+clusters are easy to spot. The JSON carries `schemaVersion`. Fields may be added within
 a version; any rename or removal bumps it.
 
 ### Policy: waivers, overrides, baselines
