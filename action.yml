@@ -1,0 +1,125 @@
+name: kupre
+description: Kubernetes upgrade preflight, health check and certificate audit, as a CI gate.
+author: Rusty-Gopher
+branding:
+  icon: check-circle
+  color: blue
+
+inputs:
+  mission:
+    description: "check (upgrade preflight), health, or certs"
+    default: check
+  target-version:
+    description: "Target Kubernetes version for the check mission, e.g. 1.37.0"
+    default: ""
+  kubeconfig:
+    description: "Path to a kubeconfig. Defaults to $KUBECONFIG, then ~/.kube/config."
+    default: ""
+  context:
+    description: "kubeconfig context to use"
+    default: ""
+  policy:
+    description: "Path to a policy file. Defaults to .kupre.yaml in the working directory, if present."
+    default: ""
+  baseline:
+    description: "A previous kupre JSON report; warnings already in it do not fail the job"
+    default: ""
+  fail-on:
+    description: "blocking (default), warnings, or never"
+    default: blocking
+  version:
+    description: "kupre release to install (v0.1.0, latest), or source to build from the action checkout (needs Go)"
+    default: latest
+  args:
+    description: "Extra arguments passed to kupre"
+    default: ""
+
+outputs:
+  verdict:
+    description: "ready, warnings, blocked, or inconclusive"
+    value: ${{ steps.scan.outputs.verdict }}
+  exit-code:
+    description: "kupre's exit code: 0 ready, 1 blocking, 2 warnings, 3 inconclusive"
+    value: ${{ steps.scan.outputs.exit-code }}
+  report:
+    description: "Path to the JSON report"
+    value: ${{ steps.scan.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install kupre
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        KUPRE_VERSION: ${{ inputs.version }}
+        GITHUB_ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        case "${RUNNER_OS}" in
+          Linux) os=linux ;; macOS) os=darwin ;; Windows) os=windows ;;
+          *) echo "unsupported runner OS ${RUNNER_OS}"; exit 1 ;;
+        esac
+        case "${RUNNER_ARCH}" in
+          X64) arch=amd64 ;; ARM64) arch=arm64 ;;
+          *) echo "unsupported runner arch ${RUNNER_ARCH}"; exit 1 ;;
+        esac
+        dir="${RUNNER_TEMP}/kupre"
+        mkdir -p "$dir"
+        echo "$dir" >> "$GITHUB_PATH"
+        if [ "${KUPRE_VERSION}" = source ]; then
+          (cd "${GITHUB_ACTION_PATH}" && go build -o "$dir/kupre" ./cmd/kupre)
+          exit 0
+        fi
+        ext=tar.gz; [ "$os" = windows ] && ext=zip
+        tag="${KUPRE_VERSION}"
+        [ "$tag" = latest ] && tag=""
+        gh release download ${tag} -R Rusty-Gopher/kupre -D "$dir" --clobber \
+          -p "kupre_${os}_${arch}.${ext}" -p checksums.txt
+        sum="sha256sum"; command -v sha256sum >/dev/null || sum="shasum -a 256"
+        (cd "$dir" && grep " kupre_${os}_${arch}.${ext}\$" checksums.txt | $sum -c -)
+        if [ "$ext" = zip ]; then unzip -oq "$dir/kupre_${os}_${arch}.zip" -d "$dir"; else tar xzf "$dir/kupre_${os}_${arch}.tar.gz" -C "$dir"; fi
+
+    - name: Run kupre
+      id: scan
+      shell: bash
+      env:
+        MISSION: ${{ inputs.mission }}
+        TARGET: ${{ inputs.target-version }}
+        KCFG: ${{ inputs.kubeconfig }}
+        KCTX: ${{ inputs.context }}
+        POLICY: ${{ inputs.policy }}
+        BASELINE: ${{ inputs.baseline }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        EXTRA: ${{ inputs.args }}
+      run: |
+        set -uo pipefail
+        report="${RUNNER_TEMP}/kupre-report.json"
+        args=("$MISSION" -o markdown --json-file "$report" --max-resources 25)
+        [ -n "$TARGET" ] && args+=(--target-version "$TARGET")
+        [ -n "$KCFG" ] && args+=(--kubeconfig "$KCFG")
+        [ -n "$KCTX" ] && args+=(--context "$KCTX")
+        [ -n "$POLICY" ] && args+=(--policy "$POLICY")
+        [ -n "$BASELINE" ] && args+=(--baseline "$BASELINE")
+        # shellcheck disable=SC2206
+        [ -n "$EXTRA" ] && args+=($EXTRA)
+
+        kupre "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
+        code=${PIPESTATUS[0]}
+
+        verdict=inconclusive
+        if [ -s "$report" ]; then
+          verdict=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["verdict"])' "$report" 2>/dev/null || echo inconclusive)
+        fi
+        {
+          echo "verdict=$verdict"
+          echo "exit-code=$code"
+          echo "report=$report"
+        } >> "$GITHUB_OUTPUT"
+
+        case "$FAIL_ON:$code" in
+          never:*) exit 0 ;;
+          warnings:2) exit 1 ;;
+          *:0|*:2) exit 0 ;;
+          *) exit "$code" ;;
+        esac

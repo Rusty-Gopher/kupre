@@ -96,3 +96,33 @@ jobs:
           wait: 180s
       - name: Integration tests
         run: KUBECONFIG="$HOME/.kube/config" make integration
+
+  # Exercises action.yml exactly as users call it, against a kind cluster.
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: helm/kind-action@v1
+        with:
+          version: v0.32.0
+          node_image: kindest/node:v1.36.4
+          cluster_name: kupre-action
+          wait: 180s
+      - id: kupre
+        uses: ./
+        with:
+          version: source
+          target-version: 1.37.0
+          fail-on: never
+      - name: Outputs are set
+        env:
+          VERDICT: ${{ steps.kupre.outputs.verdict }}
+          REPORT: ${{ steps.kupre.outputs.report }}
+        run: |
+          echo "verdict=$VERDICT"
+          case "$VERDICT" in ready|warnings|blocked) ;; *) exit 1 ;; esac
+          test -s "$REPORT"

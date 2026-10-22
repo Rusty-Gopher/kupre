@@ -41,6 +41,7 @@ type checkFlags struct {
 	policyPath    string
 	noPolicy      bool
 	baselinePath  string
+	jsonFile      string
 }
 
 // newMissionCmd builds a non-interactive subcommand for one mission.
@@ -86,6 +87,8 @@ func newMissionCmd(missionName, use, short string) *cobra.Command {
 		"policy file with disabled checks, severity overrides and waivers (default ./"+policy.DefaultFile+" if present)")
 	fs.BoolVar(&f.noPolicy, "no-policy", false,
 		"ignore ./"+policy.DefaultFile)
+	fs.StringVar(&f.jsonFile, "json-file", "",
+		"also write the JSON report to this path, whatever --output is (for CI artifacts and --baseline)")
 	fs.StringVar(&f.baselinePath, "baseline", "",
 		"previous kupre -o json report; warnings already in it no longer affect the exit code")
 
@@ -188,8 +191,32 @@ func runCheck(cmd *cobra.Command, f checkFlags, mission analyzer.Mission) error 
 		return err
 	}
 
+	if f.jsonFile != "" {
+		if err := writeJSONFile(f.jsonFile, rep, opts); err != nil {
+			return err
+		}
+	}
+
 	if code := exitCodeFor(rep, f.failOnWarn); code != exitOK {
 		return exitWith(code)
+	}
+	return nil
+}
+
+// writeJSONFile saves the JSON report beside whatever went to stdout. It lists
+// every resource, so the file is a complete baseline for a later run.
+func writeJSONFile(path string, rep *analyzer.Report, opts report.Options) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("--json-file: %w", err)
+	}
+	opts.MaxResources = -1
+	werr := report.WriteJSON(file, rep, opts)
+	if cerr := file.Close(); werr == nil && cerr != nil {
+		werr = cerr
+	}
+	if werr != nil {
+		return fmt.Errorf("--json-file %s: %w", path, werr)
 	}
 	return nil
 }
