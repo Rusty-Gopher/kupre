@@ -77,5 +77,25 @@ dockers_v2:
       org.opencontainers.image.revision: "{{ .FullCommit }}"
       org.opencontainers.image.licenses: MIT
 
-# Deferred: homebrew_casks and krew need a tap repository and a token with
-# access to it; see reference/launch/.
+# brew install rusty-gopher/tap/kupre. Inert until the repository secret
+# HOMEBREW_TAP_TOKEN (a token with contents:write on Rusty-Gopher/homebrew-tap)
+# exists; without it the cask is generated but not pushed.
+homebrew_casks:
+  - name: kupre
+    homepage: https://github.com/Rusty-Gopher/kupre
+    description: Kubernetes upgrade preflight, health check and certificate audit
+    license: MIT
+    binaries: [kupre]
+    repository:
+      owner: Rusty-Gopher
+      name: homebrew-tap
+      token: '{{ envOrDefault "HOMEBREW_TAP_TOKEN" "" }}'
+    skip_upload: '{{ if eq (envOrDefault "HOMEBREW_TAP_TOKEN" "") "" }}true{{ else }}auto{{ end }}'
+    commit_msg_template: "kupre {{ .Tag }}"
+    # Release binaries are not notarized; clear quarantine so macOS runs them.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kupre"]
+          end

@@ -43,6 +43,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: publishes the Homebrew cask when set.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
       # One attestation over the checksums file covers every artifact in it.
       # Users verify with: gh attestation verify --owner Rusty-Gopher <file>
