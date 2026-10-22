@@ -46,10 +46,11 @@ START NOW: these need lead time
 
 ## Why kupre
 
-- **The whole upgrade question, not one slice of it.** 61 checks across
+- **The whole upgrade question, not one slice of it.** 62 checks across
   removed APIs (live objects *and* Helm release history), drain blockers,
   webhooks, version skew, CoreDNS migration, kubelet and feature-gate
-  breakage, end-of-life dates, certificates, and provider-specific hazards
+  breakage, end-of-life dates, add-on support matrices (cert-manager),
+  certificates, and provider-specific hazards
   for kubeadm, Cluster API and OpenStack.
 - **Release data that keeps up.** Kubernetes 1.37 data shipped with every
   entry checked against the upstream changelog. A target beyond kupre's data
@@ -97,7 +98,7 @@ kupre check --target-version 1.37.0     # upgrade preflight
 kupre health                            # what is broken right now, and why
 kupre certs                             # every certificate kupre can see, and when it expires
 kupre fleet --target-version 1.37.0     # every context in your kubeconfig
-kupre checks -v                         # all 61 checks, no cluster needed
+kupre checks -v                         # all 62 checks, no cluster needed
 source <(kupre completion bash)         # or zsh, fish, powershell
 ```
 

@@ -116,6 +116,7 @@ func HealthChecks() []Check {
 		"ingress-nginx-retired": true,
 		// Running an unpatched release is a present-tense exposure too.
 		"kubernetes-version-support": true,
+		"cert-manager-compatibility": true,
 	}
 	for _, c := range AllChecks() {
 		if reused[c.Name] {

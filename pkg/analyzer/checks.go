@@ -16,5 +16,6 @@ func AllChecks() []Check {
 	out = append(out, PlatformChecks()...)
 	out = append(out, CoreDNSChecks()...)
 	out = append(out, LifecycleChecks()...)
+	out = append(out, AddonChecks()...)
 	return out
 }

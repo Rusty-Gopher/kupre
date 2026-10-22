@@ -478,7 +478,7 @@ var healthReusedChecks = []string{
 	"schedulable-node-count", "pdb-unhealthy", "unhealthy-pvs",
 	"apiservice-availability", "webhook-backend-fragility",
 	"trust-bundle-expiry", "apiserver-cert-expiry", "ingress-nginx-retired",
-	"kubernetes-version-support",
+	"kubernetes-version-support", "cert-manager-compatibility",
 }
 
 // checkNames returns the check names of a suite, failing on duplicates.
