@@ -58,7 +58,7 @@ func WriteWorklist(w io.Writer, r *analyzer.Report, opts Options) error {
 		writePassing(w, c, r)
 	} else if sum.Passed+sum.Skipped > 0 {
 		fmt.Fprintf(w, "%s\n\n", c.dim(fmt.Sprintf(
-			"  %d check(s) passed, %d not applicable. Re-run with -v to see them.",
+			"  %d check(s) passed, %d not applicable. -v shows them, and what each check cannot see.",
 			sum.Passed, sum.Skipped)))
 	}
 
@@ -71,23 +71,39 @@ func writeVerdict(w io.Writer, c colorizer, r *analyzer.Report, sum analyzer.Sum
 	fmt.Fprintf(w, "%s %s   %s\n",
 		c.dim("cluster"), c.bold(r.Cluster), c.dim(missionHeading(r)))
 
+	words := verdictWordsFor(r.Mission)
 	var verdict string
 	switch {
 	case len(r.Errors) > 0 || sum.Errored > 0:
 		verdict = c.red(c.bold("INCONCLUSIVE")) + c.dim(" - some checks could not run")
 	case sum.Blocking > 0:
-		verdict = c.red(c.bold("NOT READY")) + c.dim(fmt.Sprintf(
+		verdict = c.red(c.bold(words.blocked)) + c.dim(fmt.Sprintf(
 			" - %d blocking, %d to review", sum.Blocking, sum.Concerning))
 	case sum.Concerning > 0:
-		verdict = c.yellow(c.bold("READY, WITH CAVEATS")) + c.dim(fmt.Sprintf(
+		verdict = c.yellow(c.bold(words.caveats)) + c.dim(fmt.Sprintf(
 			" - %d to review", sum.Concerning))
 	default:
-		verdict = c.green(c.bold("READY")) + c.dim(" - all systems nominal")
+		verdict = c.green(c.bold(words.ready)) + c.dim(" - all systems nominal")
 	}
 	if sum.Accepted > 0 {
 		verdict += c.dim(fmt.Sprintf(" (%d accepted by policy)", sum.Accepted))
 	}
 	fmt.Fprintf(w, "%s\n\n", verdict)
+}
+
+// verdictWords is the verdict vocabulary of one mission. "Ready" answers the
+// upgrade question; a health check or certificate audit asks a different one.
+type verdictWords struct{ blocked, caveats, ready, hold string }
+
+func verdictWordsFor(mission string) verdictWords {
+	switch mission {
+	case "health":
+		return verdictWords{"UNHEALTHY", "HEALTHY, WITH ISSUES", "HEALTHY", "fix now"}
+	case "certs":
+		return verdictWords{"CERTIFICATES NEED ACTION", "CERTIFICATES OK, WITH ISSUES", "CERTIFICATES OK", "renew now"}
+	default:
+		return verdictWords{"NOT READY", "READY, WITH CAVEATS", "READY", "hold launch"}
+	}
 }
 
 // bucketHeading renders a section header, coloured by urgency.
@@ -135,7 +151,13 @@ func writeWorkItem(w io.Writer, c colorizer, n int, f analyzer.Finding, opts Opt
 		}
 		line := "     · " + res.String()
 		if res.Detail != "" {
-			line += c.dim("  " + res.Detail)
+			// Long details (release advisories carry a whole remediation)
+			// wrap under the resource instead of running off the screen.
+			if len(res.Detail) > 60 {
+				line += "\n       " + c.dim(wrapText(res.Detail, 68, "       "))
+			} else {
+				line += c.dim("  " + res.Detail)
+			}
 		}
 		fmt.Fprintln(w, line)
 	}
@@ -147,7 +169,10 @@ func writeWorkItem(w io.Writer, c colorizer, n int, f analyzer.Finding, opts Opt
 	for _, cmd := range f.Result.Commands {
 		fmt.Fprintf(w, "       %s\n", c.teal("$ "+cmd))
 	}
-	if f.Limits != "" {
+	// Limits are part of every finding's contract, but at full length on every
+	// item they bury the plan. The default view keeps the plan; -v, JSON, HTML
+	// and the TUI detail view carry them.
+	if f.Limits != "" && opts.Verbose {
 		fmt.Fprintf(w, "     %s %s\n", c.dim("limits:"),
 			c.dim(wrapText(f.Limits, 66, "             ")))
 	}
@@ -229,7 +254,7 @@ func writeFooter(w io.Writer, c colorizer, r *analyzer.Report, sum analyzer.Summ
 		fmt.Fprintf(w, "%s\n", c.red(c.bold("inconclusive - do not treat this as a clean result")))
 	case sum.Blocking > 0:
 		fmt.Fprintf(w, "%s\n", c.red(c.bold(fmt.Sprintf(
-			"hold launch - %d blocking issue(s)", sum.Blocking))))
+			"%s - %d blocking issue(s)", verdictWordsFor(r.Mission).hold, sum.Blocking))))
 		fmt.Fprintf(w, "%s\n", c.dim(
 			"Work the sections top to bottom, then re-run to confirm."))
 	case sum.Concerning > 0:
