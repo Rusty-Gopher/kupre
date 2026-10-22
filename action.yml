@@ -93,7 +93,9 @@ runs:
         FAIL_ON: ${{ inputs.fail-on }}
         EXTRA: ${{ inputs.args }}
       run: |
-        set -uo pipefail
+        # GitHub runs bash with -e; kupre exits non-zero by design, so handle
+        # the code below instead of letting the step abort.
+        set +e -uo pipefail
         report="${RUNNER_TEMP}/kupre-report.json"
         args=("$MISSION" -o markdown --json-file "$report" --max-resources 25)
         [ -n "$TARGET" ] && args+=(--target-version "$TARGET")

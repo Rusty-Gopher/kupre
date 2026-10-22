@@ -80,7 +80,7 @@ waivers:
 		t.Fatal(err)
 	}
 	r := sample()
-	p.Apply(r, today) // the expiry day itself is still covered
+	p.ApplyTo(r, today) // the expiry day itself is still covered
 
 	if !r.Findings[1].Accepted() {
 		t.Error("warning was not accepted by a valid waiver")
@@ -102,7 +102,7 @@ waivers:
 func TestExpiredWaiverStopsApplyingAndSaysSo(t *testing.T) {
 	p, _ := Load(write(t, "version: 1\nwaivers: [{check: single-replica-workloads, reason: old, expires: 2026-10-21}]\n"), known)
 	r := sample()
-	p.Apply(r, today)
+	p.ApplyTo(r, today)
 	f := r.Findings[1]
 	if f.Accepted() || !f.Concerning() {
 		t.Fatal("expired waiver still applies")
@@ -121,7 +121,7 @@ waivers:
     resources: [{namespace: shop, name: api}]
 `), known)
 	r := sample()
-	p.Apply(r, today)
+	p.ApplyTo(r, today)
 	f := r.Findings[1]
 	if f.Accepted() {
 		t.Fatal("waiver for shop/api accepted a finding that also names shop/web")
@@ -134,7 +134,7 @@ waivers:
 func TestDisableAndSeverityOverrideStayVisible(t *testing.T) {
 	p, _ := Load(write(t, "version: 1\ndisable: [single-replica-workloads]\nseverity: {pdb-blocks-drain: warning}\n"), known)
 	r := sample()
-	p.Apply(r, today)
+	p.ApplyTo(r, today)
 	if r.Findings[1].Result.Status != analyzer.StatusSkip || len(r.Findings[1].PolicyNotes) == 0 {
 		t.Error("disabled check should be reported as skipped, with a note")
 	}
@@ -165,7 +165,7 @@ func TestBaselineAcceptsOnlyKnownWarnings(t *testing.T) {
 	// Same warning, same resource: accepted. Blocker: never accepted.
 	same := sample()
 	same.Findings[1].Result = analyzer.Warn("single").WithResources(res("shop", "api"))
-	b.Apply(same)
+	b.ApplyTo(same)
 	if !same.Findings[1].Accepted() {
 		t.Error("known warning was not accepted by the baseline")
 	}
@@ -175,7 +175,7 @@ func TestBaselineAcceptsOnlyKnownWarnings(t *testing.T) {
 
 	// A new resource on a known check is new.
 	grown := sample()
-	b.Apply(grown)
+	b.ApplyTo(grown)
 	if grown.Findings[1].Accepted() {
 		t.Error("a warning with a new resource was accepted as known")
 	}

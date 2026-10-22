@@ -161,10 +161,10 @@ func runCheck(cmd *cobra.Command, f checkFlags, mission analyzer.Mission) error 
 	// the scan; record it as a tool error so the verdict is inconclusive.
 	rep.Errors = append(rep.Errors, detectFailures...)
 	if pol != nil {
-		pol.Apply(rep, time.Now())
+		pol.ApplyTo(rep, time.Now())
 	}
 	if base != nil {
-		base.Apply(rep)
+		base.ApplyTo(rep)
 	}
 
 	// HTML is a browser artifact, not terminal output. When stdout is a

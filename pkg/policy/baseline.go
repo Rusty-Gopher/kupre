@@ -69,11 +69,11 @@ func LoadBaseline(path string) (*Baseline, error) {
 
 func resourceKey(kind, ns, name string) string { return kind + "/" + ns + "/" + name }
 
-// Apply accepts findings already present in the baseline. A finding is known
+// ApplyTo accepts findings already present in the baseline. A finding is known
 // only if its check was a problem in the baseline and every resource it names
 // now was named then. Blocking findings are never accepted: a known blocker
 // still blocks.
-func (b *Baseline) Apply(r *analyzer.Report) {
+func (b *Baseline) ApplyTo(r *analyzer.Report) {
 	for i := range r.Findings {
 		f := &r.Findings[i]
 		if f.Suppression != nil || f.Error != "" || f.Result == nil ||

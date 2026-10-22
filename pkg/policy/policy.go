@@ -154,8 +154,8 @@ func parseSeverity(s string) (analyzer.Severity, bool) {
 	return 0, false
 }
 
-// Apply rewrites the report in place. today decides waiver expiry.
-func (p *Policy) Apply(r *analyzer.Report, today time.Time) {
+// ApplyTo rewrites the report in place. today decides waiver expiry.
+func (p *Policy) ApplyTo(r *analyzer.Report, today time.Time) {
 	disabled := map[string]bool{}
 	for _, name := range p.Disable {
 		disabled[name] = true
