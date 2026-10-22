@@ -1,5 +1,10 @@
 package deprecation
 
+import (
+	"strings"
+	"time"
+)
+
 // Add-on support data. Only vendor-published matrices go here: an inferred
 // compatibility claim is worse than none.
 
@@ -99,6 +104,34 @@ var Addons = []Addon{
 			{Minor: "3.31", MinKube: "1.32", MaxKube: "1.35"},
 		},
 	},
+	{
+		// envoyproxy/gateway site/content/en/news/releases/matrix.md, read
+		// 2026-10-22: "Supported version combinations are listed below", with
+		// an End of Life date per release. Common ingress-nginx migration
+		// target. The "latest" (dev) row is deliberately absent.
+		Name:              "Envoy Gateway",
+		Image:             "envoyproxy/gateway",
+		Source:            "https://gateway.envoyproxy.io/news/releases/matrix/",
+		Claim:             "supports",
+		OlderUnmaintained: true,
+		Releases: []AddonRelease{
+			{Minor: "1.9", MinKube: "1.33", MaxKube: "1.36", EOL: "2027-02-14"},
+			{Minor: "1.8", MinKube: "1.32", MaxKube: "1.35", EOL: "2026-11-08"},
+			{Minor: "1.7", MinKube: "1.32", MaxKube: "1.35", EOL: "2026-08-05"},
+			{Minor: "1.6", MinKube: "1.30", MaxKube: "1.33", EOL: "2026-05-13"},
+			{Minor: "1.5", MinKube: "1.30", MaxKube: "1.33", EOL: "2026-02-13"},
+			{Minor: "1.4", MinKube: "1.30", MaxKube: "1.33", EOL: "2025-11-13"},
+			{Minor: "1.3", MinKube: "1.29", MaxKube: "1.32", EOL: "2025-07-30"},
+			{Minor: "1.2", MinKube: "1.28", MaxKube: "1.31", EOL: "2025-05-06"},
+			{Minor: "1.1", MinKube: "1.27", MaxKube: "1.30", EOL: "2025-01-22"},
+			{Minor: "1.0", MinKube: "1.26", MaxKube: "1.29", EOL: "2024-09-13"},
+		},
+	},
+}
+
+// CheckName is the check identifier for an add-on, e.g. "envoy-gateway-compatibility".
+func (a Addon) CheckName() string {
+	return strings.ReplaceAll(strings.ToLower(a.Name), " ", "-") + "-compatibility"
 }
 
 // Release looks up a minor. known is false for releases outside the data;
@@ -115,15 +148,28 @@ func (a Addon) Release(minor string) (rel AddonRelease, known, olderThanData boo
 	return AddonRelease{}, false, ok && after(oMaj, oMin, vMaj, vMin)
 }
 
-// NewestCovering returns the newest maintained release whose published range
-// includes kube, or "" when none does yet.
-func (a Addon) NewestCovering(kube string) string {
+// NewestCovering returns the newest release maintained on today whose
+// published range includes kube, or "" when none does yet.
+func (a Addon) NewestCovering(kube string, today time.Time) string {
 	for _, r := range a.Releases {
-		if r.EOL == "" && !r.Unmaintained && r.Covers(kube) {
+		if r.Maintained(today) && r.Covers(kube) {
 			return r.Minor
 		}
 	}
 	return ""
+}
+
+// Maintained reports whether the release is still maintained on today: not
+// marked unmaintained, and its published end of life, if any, not yet reached.
+func (r AddonRelease) Maintained(today time.Time) bool {
+	if r.Unmaintained {
+		return false
+	}
+	if r.EOL == "" {
+		return true
+	}
+	t, err := time.Parse(time.DateOnly, r.EOL)
+	return err == nil && t.After(today)
 }
 
 // Covers reports whether the release's published range includes kube.

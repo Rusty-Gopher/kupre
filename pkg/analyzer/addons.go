@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,7 +19,7 @@ func AddonChecks() []Check {
 	for _, a := range deprecation.Addons {
 		a := a
 		out = append(out, Check{
-			Name:        strings.ToLower(a.Name) + "-compatibility",
+			Name:        a.CheckName(),
 			Description: fmt.Sprintf("%s version against the Kubernetes versions its vendor publishes", a.Name),
 			Category:    CategoryWorkload,
 			Severity:    SeverityWarning,
@@ -170,7 +169,7 @@ func checkAddonCompat(ctx context.Context, c *Cluster, up Upgrade, a deprecation
 		return r.WithAction(ActionVerifyManually).
 			WithRemediation("Confirm the %s version by hand and compare it with %s.", a.Name, a.Source), nil
 	}
-	if want := a.NewestCovering(up.To.MinorString()); want != "" {
+	if want := a.NewestCovering(up.To.MinorString(), now()); want != "" {
 		return r.WithRemediation("Upgrade %s to %s or newer before upgrading Kubernetes, following "+
 			"the vendor's upgrade path one minor at a time.", a.Name, want), nil
 	}
@@ -191,11 +190,9 @@ func addonProblems(a deprecation.Addon, rel deprecation.AddonRelease, minor stri
 			"published matrix, so nothing vouches for it on this cluster", a.Name, minor))
 	case rel.Unmaintained:
 		problems = append(problems, fmt.Sprintf("%s %s is no longer a maintained release", a.Name, minor))
-	case rel.EOL != "":
-		if t, err := time.Parse(time.DateOnly, rel.EOL); err == nil && !t.After(now()) {
-			problems = append(problems, fmt.Sprintf("%s %s reached end of life on %s and gets no fixes",
-				a.Name, minor, rel.EOL))
-		}
+	case !rel.Maintained(now()):
+		problems = append(problems, fmt.Sprintf("%s %s reached end of life on %s and gets no fixes",
+			a.Name, minor, rel.EOL))
 	}
 	if !older {
 		for _, k := range uniqueMinors(up.From.MinorString(), up.To.MinorString()) {

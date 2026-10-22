@@ -136,7 +136,7 @@ func TestAddonDataConsistent(t *testing.T) {
 			if i > 0 && MustParseVersion(r.Minor).Compare(MustParseVersion(a.Releases[i-1].Minor)) >= 0 {
 				t.Errorf("%s: releases not newest first at %s", a.Name, r.Minor)
 			}
-			if r.EOL == "" && !r.Unmaintained {
+			if r.Maintained(time.Date(2026, 10, 22, 0, 0, 0, 0, time.UTC)) {
 				maintained++
 			}
 		}
@@ -204,5 +204,56 @@ func TestAddonUnknownInstallIsNotAPass(t *testing.T) {
 	got, _ := checkAddonCompat(context.Background(), c, up, addon(t, "Cilium"))
 	if got.Status == StatusPass {
 		t.Fatalf("passed with an unchecked install: %q", got.Message)
+	}
+}
+
+func TestEnvoyGatewayCompat(t *testing.T) {
+	old := now
+	now = func() time.Time { return time.Date(2026, 10, 22, 0, 0, 0, 0, time.UTC) }
+	defer func() { now = old }()
+	tests := []struct {
+		name, image, from, to string
+		want                  Status
+		msg                   string
+	}{
+		{"1.9 on 1.36", "docker.io/envoyproxy/gateway:v1.9.2", "1.35.0", "1.36.0", StatusPass, "Envoy Gateway 1.9 supports Kubernetes 1.36"},
+		{"1.9 not on 1.37", "envoyproxy/gateway:v1.9.2", "1.36.4", "1.37.0", StatusWarn, "not 1.37"},
+		{"1.7 past eol", "envoyproxy/gateway:v1.7.3", "1.33.0", "1.33.0", StatusWarn, "end of life on 2026-08-05"},
+		{"1.8 eol in future is fine", "envoyproxy/gateway:v1.8.1", "1.34.0", "1.35.0", StatusPass, "supports Kubernetes 1.35"},
+		{"proxy image is not the controller", "envoyproxy/envoy:distroless-v1.39.1", "1.36.0", "1.37.0", StatusSkip, "not detected"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := NewClusterForTest(fake.NewSimpleClientset(certManagerDeploy(tt.image)), MustParseVersion(tt.from))
+			up := Upgrade{From: MustParseVersion(tt.from), To: MustParseVersion(tt.to)}
+			got, err := checkAddonCompat(context.Background(), c, up, addon(t, "Envoy Gateway"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Status != tt.want || !strings.Contains(got.Message, tt.msg) {
+				t.Errorf("got %s %q, want %s containing %q", got.Status, got.Message, tt.want, tt.msg)
+			}
+		})
+	}
+	for _, a := range deprecation.Addons {
+		if strings.Contains(a.CheckName(), " ") {
+			t.Errorf("check name %q has a space", a.CheckName())
+		}
+	}
+}
+
+// The upgrade suggestion must be a release that is maintained today, even
+// when the vendor dates every release (Envoy Gateway does).
+func TestNewestCoveringHonoursDatedEOL(t *testing.T) {
+	eg := addon(t, "Envoy Gateway")
+	today := time.Date(2026, 10, 22, 0, 0, 0, 0, time.UTC)
+	if got := eg.NewestCovering("1.35", today); got != "1.9" {
+		t.Errorf("NewestCovering(1.35) = %q, want 1.9", got)
+	}
+	if got := eg.NewestCovering("1.37", today); got != "" {
+		t.Errorf("NewestCovering(1.37) = %q, want none", got)
+	}
+	if got := eg.NewestCovering("1.35", time.Date(2027, 3, 1, 0, 0, 0, 0, time.UTC)); got != "" {
+		t.Errorf("after every listed EOL, NewestCovering = %q, want none", got)
 	}
 }
