@@ -95,6 +95,8 @@ kupre checks -v                        # list all checks, no cluster needed
   path; redirected output streams as usual.
 - Exit codes: 0 ready, 1 blocking, 2 warnings only, 3 scan failed. A failed
   scan is never reported as ready.
+- JSON output carries `schemaVersion`. New fields may appear within a
+  version; renamed or removed fields, statuses or exit codes bump it.
 
 ## How it compares
 

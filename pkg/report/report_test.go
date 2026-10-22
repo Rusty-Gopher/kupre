@@ -67,6 +67,9 @@ func TestWriteJSONIsValidAndComplete(t *testing.T) {
 	if got["cluster"] != "test-cluster" {
 		t.Errorf("cluster = %v, want test-cluster", got["cluster"])
 	}
+	if got["schemaVersion"] != JSONSchemaVersion {
+		t.Errorf("schemaVersion = %v, want %q", got["schemaVersion"], JSONSchemaVersion)
+	}
 
 	sum := got["summary"].(map[string]any)
 	if sum["blocking"].(float64) != 1 {

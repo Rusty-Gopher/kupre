@@ -8,17 +8,23 @@ import (
 	"github.com/Rusty-Gopher/kupre/pkg/analyzer"
 )
 
+// JSONSchemaVersion identifies the --output json contract. Adding fields is
+// compatible and keeps the version; renaming, removing or changing the meaning
+// of a field, a status, a bucket slug or an exit code bumps it.
+const JSONSchemaVersion = "1"
+
 // jsonReport is the wire format for --output json. It is a distinct type from
 // analyzer.Report so the CLI contract stays stable as internals change.
 type jsonReport struct {
-	Cluster  string          `json:"cluster"`
-	Upgrade  jsonUpgrade     `json:"upgrade"`
-	Summary  jsonSummary     `json:"summary"`
-	Verdict  string          `json:"verdict"`
-	ExitCode int             `json:"exitCode"`
-	Findings []jsonFinding   `json:"findings"`
-	Errors   []string        `json:"errors,omitempty"`
-	Meta     json.RawMessage `json:"-"`
+	SchemaVersion string          `json:"schemaVersion"`
+	Cluster       string          `json:"cluster"`
+	Upgrade       jsonUpgrade     `json:"upgrade"`
+	Summary       jsonSummary     `json:"summary"`
+	Verdict       string          `json:"verdict"`
+	ExitCode      int             `json:"exitCode"`
+	Findings      []jsonFinding   `json:"findings"`
+	Errors        []string        `json:"errors,omitempty"`
+	Meta          json.RawMessage `json:"-"`
 }
 
 type jsonUpgrade struct {
@@ -107,8 +113,9 @@ func verdict(sum analyzer.Summary, r *analyzer.Report) string {
 func WriteJSON(w io.Writer, r *analyzer.Report, opts Options) error {
 	sum := r.Summarize()
 	out := jsonReport{
-		Cluster: r.Cluster,
-		Upgrade: jsonUpgrade{From: r.Upgrade.From.String(), To: r.Upgrade.To.String()},
+		SchemaVersion: JSONSchemaVersion,
+		Cluster:       r.Cluster,
+		Upgrade:       jsonUpgrade{From: r.Upgrade.From.String(), To: r.Upgrade.To.String()},
 		Summary: jsonSummary{
 			Blocking: sum.Blocking, Concerning: sum.Concerning, Passed: sum.Passed,
 			Skipped: sum.Skipped, Errored: sum.Errored, Total: len(r.Findings),
