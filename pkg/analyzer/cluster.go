@@ -14,6 +14,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -641,6 +642,32 @@ func (c *Cluster) NodeMetrics(ctx context.Context) ([]unstructured.Unstructured,
 		return nil, err
 	}
 	return c.ListGVR(ctx, gvr)
+}
+
+// IngressClasses lists all IngressClasses.
+func (c *Cluster) IngressClasses(ctx context.Context) ([]networkingv1.IngressClass, error) {
+	return memo(c, "ingressclasses", func() ([]networkingv1.IngressClass, error) {
+		return listAll(ctx, func(ctx context.Context, o metav1.ListOptions) ([]networkingv1.IngressClass, string, error) {
+			l, err := c.clientset.NetworkingV1().IngressClasses().List(ctx, o)
+			if err != nil {
+				return nil, "", fmt.Errorf("list ingressclasses: %w", err)
+			}
+			return l.Items, l.Continue, nil
+		})
+	})
+}
+
+// Ingresses lists all Ingresses across namespaces.
+func (c *Cluster) Ingresses(ctx context.Context) ([]networkingv1.Ingress, error) {
+	return memo(c, "ingresses", func() ([]networkingv1.Ingress, error) {
+		return listAll(ctx, func(ctx context.Context, o metav1.ListOptions) ([]networkingv1.Ingress, string, error) {
+			l, err := c.clientset.NetworkingV1().Ingresses(metav1.NamespaceAll).List(ctx, o)
+			if err != nil {
+				return nil, "", fmt.Errorf("list ingresses: %w", err)
+			}
+			return l.Items, l.Continue, nil
+		})
+	})
 }
 
 // TLSSecrets lists Secrets of type kubernetes.io/tls across all namespaces.

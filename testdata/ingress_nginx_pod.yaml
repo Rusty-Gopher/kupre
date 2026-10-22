@@ -1,0 +1,15 @@
+# A running ingress-nginx controller pod, carrying the label the retirement
+# statement's own detection command selects on:
+#   kubectl get pods --all-namespaces --selector app.kubernetes.io/name=ingress-nginx
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ingress-nginx-controller-6b8fdd9c7-x2p4q
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/component: controller
+spec:
+  containers:
+    - name: controller
+      image: registry.k8s.io/ingress-nginx/controller:v1.11.5

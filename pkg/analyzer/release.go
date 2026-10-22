@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"github.com/Rusty-Gopher/kupre/pkg/deprecation"
 )
 
@@ -52,6 +54,23 @@ func ReleaseChecks() []Check {
 			Severity:    SeverityInfo,
 			Action:      ActionReviewLater,
 			Run:         checkLegacyEndpoints,
+		},
+		{
+			Name:        "ingress-nginx-retired",
+			Description: "Use of the ingress-nginx controller, retired upstream in March 2026 with no further releases of any kind",
+			Category:    CategoryWorkload,
+			Severity:    SeverityWarning,
+			Action:      ActionPlanAhead,
+			Evidence: "Lists pods labelled app.kubernetes.io/name=ingress-nginx (the detection " +
+				"signal the retirement statement itself uses), IngressClasses whose " +
+				"spec.controller is k8s.io/ingress-nginx, and the Ingress objects served by " +
+				"those classes or carrying the deprecated kubernetes.io/ingress.class: nginx " +
+				"annotation.",
+			Limits: "Cannot tell whether the deployed ingress-nginx build has known CVEs, and " +
+				"cannot detect a renamed or unlabelled deployment - absence of the label is " +
+				"not proof of absence. The Ingress list is blast radius (routes a migration " +
+				"must cover), not a measurement of traffic.",
+			Run: checkIngressNginxRetired,
 		},
 		{
 			Name:        "release-advisories",
@@ -295,4 +314,117 @@ func checkReleaseAdvisories(_ context.Context, _ *Cluster, up Upgrade) (*Result,
 			"caused real upgrade failures - review them against your node configuration and " +
 			"component flags before proceeding.").
 		WithDocs("https://kubernetes.io/releases/"), nil
+}
+
+// ingressNginxStatementURL is the joint Kubernetes Steering and Security
+// Response Committee statement announcing the retirement.
+const ingressNginxStatementURL = "https://kubernetes.io/blog/2026/01/29/ingress-nginx-statement/"
+
+// checkIngressNginxRetired detects use of the ingress-nginx controller, which
+// the Kubernetes project retired in March 2026. Not version-gated: the
+// retirement is in the past, so this is about running retired software today.
+//
+// Evidence strongest first: controller pods carrying the label the statement's
+// own detection command selects on, then IngressClasses bound to the
+// k8s.io/ingress-nginx controller, then the Ingress objects those serve - the
+// blast radius a migration has to cover.
+func checkIngressNginxRetired(ctx context.Context, c *Cluster, _ Upgrade) (*Result, error) {
+	// A Forbidden list degrades that signal to "unknown", never to "absent".
+	// Anything found in the remaining readable lists is still reported.
+	var unreadable []string
+
+	pods, err := c.Pods(ctx)
+	switch {
+	case err == nil:
+	case apierrors.IsForbidden(err):
+		unreadable = append(unreadable, "pods")
+	default:
+		return nil, err
+	}
+
+	classes, err := c.IngressClasses(ctx)
+	switch {
+	case err == nil:
+	case apierrors.IsForbidden(err):
+		unreadable = append(unreadable, "ingressclasses")
+	default:
+		return nil, err
+	}
+
+	ingresses, err := c.Ingresses(ctx)
+	switch {
+	case err == nil:
+	case apierrors.IsForbidden(err):
+		unreadable = append(unreadable, "ingresses")
+	default:
+		return nil, err
+	}
+
+	var controllers []AffectedResource
+	for _, p := range pods {
+		if p.Labels["app.kubernetes.io/name"] == "ingress-nginx" {
+			controllers = append(controllers, AffectedResource{
+				Kind: "Pod", APIVersion: "v1", Namespace: p.Namespace, Name: p.Name,
+				Detail: "labelled app.kubernetes.io/name=ingress-nginx",
+			})
+		}
+	}
+
+	nginxClasses := map[string]bool{}
+	var classResources []AffectedResource
+	for _, ic := range classes {
+		if ic.Spec.Controller == "k8s.io/ingress-nginx" {
+			nginxClasses[ic.Name] = true
+			classResources = append(classResources, AffectedResource{
+				Kind: "IngressClass", APIVersion: "networking.k8s.io/v1", Name: ic.Name,
+				Detail: "spec.controller=k8s.io/ingress-nginx",
+			})
+		}
+	}
+
+	var served []AffectedResource
+	for _, ing := range ingresses {
+		switch {
+		case ing.Spec.IngressClassName != nil && nginxClasses[*ing.Spec.IngressClassName]:
+			served = append(served, AffectedResource{
+				Kind: "Ingress", APIVersion: "networking.k8s.io/v1",
+				Namespace: ing.Namespace, Name: ing.Name,
+				Detail: "spec.ingressClassName=" + *ing.Spec.IngressClassName,
+			})
+		case ing.Annotations["kubernetes.io/ingress.class"] == "nginx":
+			served = append(served, AffectedResource{
+				Kind: "Ingress", APIVersion: "networking.k8s.io/v1",
+				Namespace: ing.Namespace, Name: ing.Name,
+				Detail: "deprecated annotation kubernetes.io/ingress.class: nginx",
+			})
+		}
+	}
+
+	if len(controllers)+len(classResources)+len(served) == 0 {
+		if len(unreadable) > 0 {
+			return Skip("no ingress-nginx found in the readable lists, but no permission to list %s "+
+				"- grant list on %s (see deploy/rbac.yaml) for a conclusive answer",
+				strings.Join(unreadable, ", "), strings.Join(unreadable, ", ")), nil
+		}
+		return Pass("no ingress-nginx controller pods, IngressClasses, or served Ingresses found"), nil
+	}
+
+	sortResources(controllers)
+	sortResources(classResources)
+	sortResources(served)
+	affected := append(append(controllers, classResources...), served...)
+
+	return Warn("ingress-nginx is in use (%d controller pod(s), %d IngressClass(es), %d Ingress(es) served) - the project was retired in March 2026",
+		len(controllers), len(classResources), len(served)).
+		WithResources(affected...).
+		WithRemediation("The Kubernetes project retired ingress-nginx in March 2026: \"There will " +
+			"be no more releases for bug fixes, security patches, or any updates of any kind after " +
+			"the project is retired.\" Existing deployments keep working, which is the trap - " +
+			"\"unless you proactively check, you may not know you are affected until you are " +
+			"compromised\" - and per the statement, \"choosing to remain with Ingress NGINX after " +
+			"its retirement leaves you and your users vulnerable to attack.\" Migrate to a Gateway " +
+			"API implementation or another actively maintained Ingress controller; the Ingress " +
+			"objects listed above are the routes that migration has to cover.").
+		WithCommands("kubectl get pods --all-namespaces --selector app.kubernetes.io/name=ingress-nginx").
+		WithDocs(ingressNginxStatementURL), nil
 }

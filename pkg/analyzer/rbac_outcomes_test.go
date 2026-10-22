@@ -62,6 +62,42 @@ func TestForbiddenIsNeverAPass(t *testing.T) {
 		}
 	})
 
+	t.Run("ingress-nginx scan without ingressclasses access skips", func(t *testing.T) {
+		cs := fake.NewSimpleClientset()
+		forbid(cs, "ingressclasses")
+		c := NewClusterForTest(cs, MustParseVersion("1.35.3"))
+
+		got, err := checkIngressNginxRetired(context.Background(), c, up)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Status != StatusSkip {
+			t.Errorf("status = %v, want Skip - an unreadable list is not an absent controller: %s",
+				got.Status, got.Message)
+		}
+		if !strings.Contains(strings.ToLower(got.Message), "permission") {
+			t.Errorf("skip should name the missing permission: %s", got.Message)
+		}
+	})
+
+	t.Run("forbidden ingress lists do not hide a labelled controller pod", func(t *testing.T) {
+		pod := &corev1.Pod{}
+		pod.Name, pod.Namespace = "ingress-nginx-controller", "ingress-nginx"
+		pod.Labels = map[string]string{"app.kubernetes.io/name": "ingress-nginx"}
+		cs := fake.NewSimpleClientset(pod)
+		forbid(cs, "ingressclasses")
+		forbid(cs, "ingresses")
+		c := NewClusterForTest(cs, MustParseVersion("1.35.3"))
+
+		got, err := checkIngressNginxRetired(context.Background(), c, up)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Status != StatusWarn {
+			t.Errorf("status = %v, want Warn on pod evidence alone: %s", got.Status, got.Message)
+		}
+	})
+
 	t.Run("non-RBAC secret errors stay tool errors", func(t *testing.T) {
 		// A network failure must not be soft-pedaled into a permission skip:
 		// skip means "known limitation", an error means "scan is incomplete".

@@ -1,0 +1,9 @@
+# An IngressClass bound to the retired ingress-nginx controller. The project
+# was retired in March 2026; no further releases of any kind ship for it.
+# https://kubernetes.io/blog/2026/01/29/ingress-nginx-statement/
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: nginx
+spec:
+  controller: k8s.io/ingress-nginx

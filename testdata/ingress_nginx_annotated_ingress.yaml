@@ -1,0 +1,22 @@
+# An Ingress claimed by ingress-nginx through the deprecated
+# kubernetes.io/ingress.class annotation, the pre-IngressClass mechanism that
+# older deployments still use.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: legacy-web
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - host: legacy.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: legacy-web
+                port:
+                  number: 80

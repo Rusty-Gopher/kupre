@@ -244,6 +244,29 @@ func TestChecksAgainstFixtures(t *testing.T) {
 			fixtures: []string{"stale_kubelet_node.yaml"},
 			run:      checkKubeletSkew, wantStatus: StatusFail, wantCount: 1,
 		},
+		{
+			name: "retired ingress-nginx is caught with full blast radius",
+			fixtures: []string{
+				"ingress_nginx_pod.yaml", "ingress_nginx_class.yaml",
+				"ingress_nginx_ingress.yaml", "ingress_nginx_annotated_ingress.yaml",
+			},
+			run: checkIngressNginxRetired, wantStatus: StatusWarn, wantCount: 4,
+		},
+		{
+			name:     "ingress-nginx IngressClass alone is caught",
+			fixtures: []string{"ingress_nginx_class.yaml"},
+			run:      checkIngressNginxRetired, wantStatus: StatusWarn, wantCount: 1,
+		},
+		{
+			name:     "deprecated nginx ingress.class annotation alone is caught",
+			fixtures: []string{"ingress_nginx_annotated_ingress.yaml"},
+			run:      checkIngressNginxRetired, wantStatus: StatusWarn, wantCount: 1,
+		},
+		{
+			name:     "unrelated ingress controller does not fire ingress-nginx-retired",
+			fixtures: []string{"traefik_ingressclass.yaml", "traefik_pod.yaml"},
+			run:      checkIngressNginxRetired, wantStatus: StatusPass,
+		},
 	}
 
 	up := Upgrade{From: MustParseVersion("1.35.3"), To: MustParseVersion("1.36.0")}

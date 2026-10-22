@@ -1,0 +1,13 @@
+# Negative fixture: a controller pod for an unrelated ingress controller.
+# The label value differs from ingress-nginx; the check must not fire.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: traefik-7d9c66b8f-k2j4x
+  namespace: traefik
+  labels:
+    app.kubernetes.io/name: traefik
+spec:
+  containers:
+    - name: traefik
+      image: docker.io/library/traefik:v3.3.4

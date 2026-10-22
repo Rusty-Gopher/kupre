@@ -111,6 +111,9 @@ func HealthChecks() []Check {
 		"schedulable-node-count": true, "pdb-unhealthy": true, "unhealthy-pvs": true,
 		"apiservice-availability": true, "webhook-backend-fragility": true,
 		"trust-bundle-expiry": true, "apiserver-cert-expiry": true,
+		// Retired software is a present-tense security exposure, not just an
+		// upgrade concern: no more security patches of any kind ship for it.
+		"ingress-nginx-retired": true,
 	}
 	for _, c := range AllChecks() {
 		if reused[c.Name] {

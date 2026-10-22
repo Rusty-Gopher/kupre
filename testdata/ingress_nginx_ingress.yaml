@@ -1,0 +1,21 @@
+# An Ingress served by the retired controller via spec.ingressClassName,
+# referencing the IngressClass in ingress_nginx_class.yaml. Blast radius: a
+# route the migration off ingress-nginx has to cover.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web
+  namespace: default
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: web.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 80
