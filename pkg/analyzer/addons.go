@@ -118,9 +118,9 @@ func checkAddonCompat(ctx context.Context, c *Cluster, up Upgrade, a deprecation
 
 	var (
 		problems, unknown, minors []string
-		affected          []AffectedResource
-		seen              = map[string]bool{}
-		allUnversioned    = true
+		affected                  []AffectedResource
+		seen                      = map[string]bool{}
+		allUnversioned            = true
 	)
 	add := func(p string) {
 		if !seen[p] {
