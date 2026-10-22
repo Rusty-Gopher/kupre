@@ -30,6 +30,9 @@ jobs:
       - name: Verify dependencies are tidy
         run: go mod tidy -diff
 
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
+
       - name: Test
         run: go test ./...
 

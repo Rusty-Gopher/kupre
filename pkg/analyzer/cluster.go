@@ -1,5 +1,7 @@
 package analyzer
 
+//lint:file-ignore SA1019 the Endpoints accessor reads the deprecated API on purpose; legacy-endpoints reports it
+
 import (
 	"context"
 	"errors"
@@ -65,7 +67,9 @@ func (c *Cluster) GetConfigMap(ctx context.Context, namespace, name string) (*co
 	})
 }
 
-// Endpoints lists all Endpoints objects across namespaces.
+// Endpoints lists all Endpoints objects across namespaces. The API is
+// deprecated in favour of EndpointSlice; reading it is the point, because
+// legacy-endpoints reports exactly the objects still managed through it.
 func (c *Cluster) Endpoints(ctx context.Context) ([]corev1.Endpoints, error) {
 	return memo(c, "endpoints", func() ([]corev1.Endpoints, error) {
 		return listAll(ctx, func(ctx context.Context, o metav1.ListOptions) ([]corev1.Endpoints, string, error) {

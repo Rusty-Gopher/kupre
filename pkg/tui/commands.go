@@ -10,14 +10,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// loadContextsCmd reads the kubeconfig and lists its contexts.
-func loadContextsCmd(kubeconfig string) tea.Cmd {
-	return func() tea.Msg {
-		names, current, err := ListContexts(kubeconfig)
-		return contextsMsg{contexts: names, current: current, err: err}
-	}
-}
-
 // ListContexts returns the context names in a kubeconfig along with the
 // current-context. An empty path uses the standard loading rules.
 func ListContexts(kubeconfig string) (names []string, current string, err error) {

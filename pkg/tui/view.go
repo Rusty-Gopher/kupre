@@ -458,32 +458,6 @@ func (m Model) passedFooter() string {
 	return b.String()
 }
 
-// summaryLine renders the verdict and counts.
-func (m Model) summaryLine(sum analyzer.Summary) string {
-	parts := []string{m.styles.Pass.Render(fmt.Sprintf("%d passed", sum.Passed))}
-	if sum.Concerning > 0 {
-		parts = append(parts, m.styles.Warn.Render(fmt.Sprintf("%d warning", sum.Concerning)))
-	}
-	if sum.Blocking > 0 {
-		parts = append(parts, m.styles.Fail.Render(fmt.Sprintf("%d blocking", sum.Blocking)))
-	}
-	if sum.Skipped > 0 {
-		parts = append(parts, m.styles.Skip.Render(fmt.Sprintf("%d skipped", sum.Skipped)))
-	}
-	if sum.Errored > 0 {
-		parts = append(parts, m.styles.ErrorText.Render(fmt.Sprintf("%d errored", sum.Errored)))
-	}
-
-	verdict := m.styles.Nominal.Render("all systems nominal")
-	if sum.Blocking > 0 {
-		verdict = m.styles.Hold.Render(fmt.Sprintf("hold launch - %d issue(s) found", sum.Blocking))
-	} else if sum.Concerning > 0 {
-		verdict = m.styles.Warn.Render(fmt.Sprintf("proceed with caution - %d warning(s)", sum.Concerning))
-	}
-
-	return strings.Join(parts, m.styles.Subtle.Render(" · ")) + "\n" + verdict
-}
-
 // viewDetail renders the full record for the selected finding, including the
 // copy-paste commands and the evidence basis the CLI report shows.
 func (m Model) viewDetail() string {

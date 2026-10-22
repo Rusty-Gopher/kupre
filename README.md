@@ -9,6 +9,7 @@
 <p align="center">
   <a href="https://github.com/Rusty-Gopher/kupre/actions/workflows/ci.yml"><img src="https://github.com/Rusty-Gopher/kupre/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/Rusty-Gopher/kupre/releases"><img src="https://img.shields.io/github/v/release/Rusty-Gopher/kupre" alt="Release"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/Rusty-Gopher/kupre"><img src="https://api.scorecard.dev/projects/github.com/Rusty-Gopher/kupre/badge" alt="OpenSSF Scorecard"></a>
   <a href="https://goreportcard.com/report/github.com/Rusty-Gopher/kupre"><img src="https://goreportcard.com/badge/github.com/Rusty-Gopher/kupre" alt="Go Report Card"></a>
   <img src="https://img.shields.io/badge/release%20data-Kubernetes%201.37-326ce5?logo=kubernetes&logoColor=white" alt="Release data: Kubernetes 1.37">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
