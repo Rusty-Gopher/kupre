@@ -89,7 +89,7 @@ jobs:
       - uses: helm/kind-action@v1
         with:
           # The action's default kind writes kubeadm v1beta3 configs, which
-          # kubeadm 1.37 rejects; v0.32.0 is the first release that boots 1.37.
+          # kubeadm 1.37 rejects; v0.32.0 is verified to boot 1.37.
           version: v0.32.0
           node_image: kindest/node:${{ matrix.node }}
           cluster_name: kupre-it
