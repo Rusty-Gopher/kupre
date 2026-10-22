@@ -73,6 +73,10 @@ START NOW: these need lead time
 # Go 1.26+
 go install github.com/Rusty-Gopher/kupre/cmd/kupre@latest
 
+# Homebrew and krew (coming soon: the tap goes live with the next release)
+# brew install rusty-gopher/tap/kupre
+# kubectl krew index add rusty-gopher https://github.com/Rusty-Gopher/homebrew-tap && kubectl krew install rusty-gopher/kupre
+
 # Container image (multi-arch, distroless, non-root)
 docker run --rm -v ~/.kube:/home/nonroot/.kube:ro ghcr.io/rusty-gopher/kupre health
 # (add --network host for a cluster on localhost, such as kind)
@@ -115,7 +119,7 @@ only switch on when their platform is detected.
 ### GitHub Action
 
 ```yaml
-- uses: Rusty-Gopher/kupre@v0.2.0
+- uses: Rusty-Gopher/kupre@v0.2.1
   with:
     target-version: 1.37.0          # mission: check (default) | health | certs
     fail-on: blocking               # blocking (default) | warnings | never

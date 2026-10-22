@@ -77,20 +77,26 @@ dockers_v2:
       org.opencontainers.image.revision: "{{ .FullCommit }}"
       org.opencontainers.image.licenses: MIT
 
-# brew install rusty-gopher/tap/kupre. Inert until the repository secret
-# HOMEBREW_TAP_TOKEN (a token with contents:write on Rusty-Gopher/homebrew-tap)
-# exists; without it the cask is generated but not pushed.
+# Homebrew cask and krew manifest, both published to Rusty-Gopher/homebrew-tap
+# (one repo: Casks/ for brew, plugins/ as a krew index). Inert until the
+# TAP_DEPLOY_KEY secret holds the private half of a write deploy key on that
+# repo; without it both files are generated in dist/ but not pushed.
+#   brew install rusty-gopher/tap/kupre
+#   kubectl krew index add rusty-gopher https://github.com/Rusty-Gopher/homebrew-tap
+#   kubectl krew install rusty-gopher/kupre
 homebrew_casks:
   - name: kupre
     homepage: https://github.com/Rusty-Gopher/kupre
     description: Kubernetes upgrade preflight, health check and certificate audit
     license: MIT
     binaries: [kupre]
-    repository:
+    repository: &tap
       owner: Rusty-Gopher
       name: homebrew-tap
-      token: '{{ envOrDefault "HOMEBREW_TAP_TOKEN" "" }}'
-    skip_upload: '{{ if eq (envOrDefault "HOMEBREW_TAP_TOKEN" "") "" }}true{{ else }}auto{{ end }}'
+      git:
+        url: git@github.com:Rusty-Gopher/homebrew-tap.git
+        private_key: '{{ envOrDefault "TAP_DEPLOY_KEY" "" }}'
+    skip_upload: &tapskip '{{ if eq (envOrDefault "TAP_DEPLOY_KEY" "") "" }}true{{ else }}auto{{ end }}'
     commit_msg_template: "kupre {{ .Tag }}"
     # Release binaries are not notarized; clear quarantine so macOS runs them.
     hooks:
@@ -99,3 +105,15 @@ homebrew_casks:
           if OS.mac?
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kupre"]
           end
+
+krews:
+  - name: kupre
+    homepage: https://github.com/Rusty-Gopher/kupre
+    short_description: Upgrade preflight, health check and certificate audit
+    description: |
+      Read-only Kubernetes upgrade preflight, health check and certificate
+      audit. Run "kubectl kupre check --target-version 1.37.0" for an ordered
+      worklist of what blocks the upgrade, with the exact fix for each item.
+    repository: *tap
+    skip_upload: *tapskip
+    commit_msg_template: "kupre {{ .Tag }} (krew)"
