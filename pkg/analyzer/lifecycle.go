@@ -71,6 +71,14 @@ func checkVersionSupport(_ context.Context, c *Cluster, up Upgrade) (*Result, er
 				"further patches ship.").
 			WithDocs("https://kubernetes.io/releases/"), nil
 	}
+	// The current release is fine; if the target's status is unknown, the
+	// check has not established everything it covers, so it cannot pass.
+	if target := up.To.MinorString(); target != current {
+		if _, ok := deprecation.EOLDate(target); !ok {
+			return Skip("Kubernetes %s is supported upstream until %s; no end-of-life data for "+
+				"target %s", current, eol.Format(time.DateOnly), target), nil
+		}
+	}
 	return Pass("Kubernetes %s is supported upstream until %s", current,
 		eol.Format(time.DateOnly)), nil
 }

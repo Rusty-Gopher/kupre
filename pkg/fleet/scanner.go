@@ -24,6 +24,10 @@ type Scanner struct {
 	// TargetVersion is the upgrade target applied to every cluster.
 	TargetVersion analyzer.Version
 
+	// Finalize, when set, adjusts each cluster's report before it is
+	// aggregated; the CLI applies .kupre.yaml through it.
+	Finalize func(*analyzer.Report)
+
 	// scan runs the scan for one context. Nil means the real connect-and-scan
 	// path; tests override it to exercise Scan without a live cluster.
 	scan func(ctx context.Context, name string) ClusterResult
@@ -157,6 +161,9 @@ func (s *Scanner) scanOne(ctx context.Context, name string) ClusterResult {
 	rep := engine.Run(ctx, cluster, up)
 	rep.Mission = "upgrade"
 	rep.Errors = append(rep.Errors, detectFailures...)
+	if s.Finalize != nil {
+		s.Finalize(rep)
+	}
 	return ClusterResult{Context: name, Report: rep}
 }
 

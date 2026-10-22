@@ -96,7 +96,13 @@ runs:
         # GitHub runs bash with -e; kupre exits non-zero by design, so handle
         # the code below instead of letting the step abort.
         set +e -uo pipefail
-        report="${RUNNER_TEMP}/kupre-report.json"
+        case "$FAIL_ON" in
+          blocking|warnings|never) ;;
+          *) echo "::error::fail-on must be blocking, warnings or never, got '$FAIL_ON'"; exit 1 ;;
+        esac
+        # A fresh file per invocation: a later scan that fails early must not
+        # publish an earlier scan's verdict.
+        report=$(mktemp "${RUNNER_TEMP}/kupre-report-XXXXXX.json")
         args=("$MISSION" -o markdown --json-file "$report" --max-resources 25)
         [ -n "$TARGET" ] && args+=(--target-version "$TARGET")
         [ -n "$KCFG" ] && args+=(--kubeconfig "$KCFG")
@@ -105,6 +111,9 @@ runs:
         [ -n "$BASELINE" ] && args+=(--baseline "$BASELINE")
         # shellcheck disable=SC2206
         [ -n "$EXTRA" ] && args+=($EXTRA)
+        # fail-on is the only threshold: undo any --fail-on-warn in args so
+        # kupre's exit code stays the plain verdict that fail-on maps below.
+        args+=(--fail-on-warn=false)
 
         kupre "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
         code=${PIPESTATUS[0]}

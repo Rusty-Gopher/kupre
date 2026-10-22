@@ -24,6 +24,7 @@ func TestVersionSupport(t *testing.T) {
 		{"older than data is eol", "2026-10-22", "1.20.0", "1.20.0", StatusWarn, "end of life"},
 		{"newer than data skips", "2026-10-22", "1.40.0", "1.40.0", StatusSkip, "no upstream end-of-life date"},
 		{"eol target", "2026-10-22", "1.32.0", "1.33.0", StatusWarn, "upgrade target Kubernetes 1.33"},
+		{"unknown target is not a pass", "2026-10-22", "1.37.0", "1.38.0", StatusSkip, "no end-of-life data for target 1.38"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

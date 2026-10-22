@@ -33,7 +33,7 @@ func TestCertManagerCompat(t *testing.T) {
 		want                  Status
 		msg                   string
 	}{
-		{"supported", "quay.io/jetstack/cert-manager-controller:v1.21.1", "1.35.0", "1.36.0", StatusPass, "supports Kubernetes 1.36"},
+		{"supported", "quay.io/jetstack/cert-manager-controller:v1.21.1", "1.35.0", "1.36.0", StatusPass, "cert-manager 1.21 supports Kubernetes 1.36"},
 		{"detail has one v", "quay.io/jetstack/cert-manager-controller:v1.21.1", "1.36.4", "1.37.0", StatusWarn, "not 1.37"},
 		{"no release supports 1.37 yet", "quay.io/jetstack/cert-manager-controller:v1.21.1", "1.36.4", "1.37.0", StatusWarn, "not 1.37"},
 		{"target outside range", "quay.io/jetstack/cert-manager-controller:v1.20.2", "1.35.0", "1.36.0", StatusWarn, "not 1.36"},
@@ -104,7 +104,7 @@ func TestCiliumCompat(t *testing.T) {
 		want                  Status
 		msg                   string
 	}{
-		{"tested", "quay.io/cilium/cilium:v1.20.3@sha256:abcd", "1.35.0", "1.36.0", StatusPass, "is e2e tested against Kubernetes 1.36"},
+		{"tested", "quay.io/cilium/cilium:v1.20.3@sha256:abcd", "1.35.0", "1.36.0", StatusPass, "Cilium 1.20 is e2e tested against Kubernetes 1.36"},
 		{"1.37 untested, wording is the vendor's", "quay.io/cilium/cilium:v1.20.3", "1.36.4", "1.37.0", StatusWarn, "is e2e tested against Kubernetes 1.33 to 1.36, not 1.37"},
 		{"unmaintained", "quay.io/cilium/cilium:v1.17.6", "1.31.0", "1.32.0", StatusWarn, "no longer a maintained release"},
 		{"envoy image is not the agent", "quay.io/cilium/cilium-envoy:v1.34.0", "1.36.0", "1.37.0", StatusSkip, "not detected"},
@@ -152,7 +152,7 @@ func TestCalicoCompat(t *testing.T) {
 		want                  Status
 		msg                   string
 	}{
-		{"3.33 is tested on 1.37", "quay.io/calico/node:v3.33.0", "1.36.4", "1.37.0", StatusPass, "is tested against Kubernetes 1.37"},
+		{"3.33 is tested on 1.37", "quay.io/calico/node:v3.33.0", "1.36.4", "1.37.0", StatusPass, "Calico 3.33 is tested against Kubernetes 1.37"},
 		{"3.32 is not", "docker.io/calico/node:v3.32.2", "1.36.4", "1.37.0", StatusWarn, "not 1.37"},
 		{"older makes no maintenance claim", "calico/node:v3.29.1", "1.31.0", "1.32.0", StatusWarn, "nothing vouches"},
 		{"operator image is not calico", "quay.io/tigera/operator:v1.40.0", "1.36.0", "1.37.0", StatusSkip, "not detected"},
@@ -172,5 +172,37 @@ func TestCalicoCompat(t *testing.T) {
 				t.Errorf("Calico publishes no EOL policy, but kupre claimed one: %q", got.Message)
 			}
 		})
+	}
+}
+
+// Every install is checked: a compatible copy must not hide an old one.
+func TestAddonChecksEveryInstall(t *testing.T) {
+	newer := ciliumDS("quay.io/cilium/cilium:v1.20.3")
+	older := ciliumDS("quay.io/cilium/cilium:v1.16.4")
+	older.Name, older.Namespace = "cilium-legacy", "legacy"
+	c := NewClusterForTest(fake.NewSimpleClientset(newer, older), MustParseVersion("1.35.0"))
+	up := Upgrade{From: MustParseVersion("1.35.0"), To: MustParseVersion("1.36.0")}
+	got, err := checkAddonCompat(context.Background(), c, up, addon(t, "Cilium"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusWarn || !strings.Contains(got.Message, "1.16") {
+		t.Fatalf("got %s %q, want a warning about the 1.16 install", got.Status, got.Message)
+	}
+	if len(got.Resources) != 1 || got.Resources[0].Namespace != "legacy" {
+		t.Errorf("affected = %v, want only the legacy install", got.Resources)
+	}
+}
+
+// An install newer than the data leaves the check unable to pass.
+func TestAddonUnknownInstallIsNotAPass(t *testing.T) {
+	known := ciliumDS("quay.io/cilium/cilium:v1.20.3")
+	future := ciliumDS("quay.io/cilium/cilium:v1.21.0")
+	future.Name = "cilium-next"
+	c := NewClusterForTest(fake.NewSimpleClientset(known, future), MustParseVersion("1.35.0"))
+	up := Upgrade{From: MustParseVersion("1.35.0"), To: MustParseVersion("1.36.0")}
+	got, _ := checkAddonCompat(context.Background(), c, up, addon(t, "Cilium"))
+	if got.Status == StatusPass {
+		t.Fatalf("passed with an unchecked install: %q", got.Message)
 	}
 }

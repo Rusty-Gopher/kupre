@@ -10,6 +10,7 @@ import (
 
 	"github.com/Rusty-Gopher/kupre/pkg/analyzer"
 	"github.com/Rusty-Gopher/kupre/pkg/fleet"
+	"github.com/Rusty-Gopher/kupre/pkg/policy"
 	"github.com/Rusty-Gopher/kupre/pkg/report"
 	"github.com/spf13/cobra"
 )
@@ -22,6 +23,8 @@ type fleetFlags struct {
 	concurrency   int
 	timeout       time.Duration
 	verbose       bool
+	policyPath    string
+	noPolicy      bool
 }
 
 // newFleetCmd builds the `kupre fleet` subcommand.
@@ -52,6 +55,9 @@ func newFleetCmd() *cobra.Command {
 	fs.IntVar(&f.concurrency, "concurrency", 4, "how many clusters to scan at once")
 	fs.DurationVar(&f.timeout, "timeout", 10*time.Minute, "overall timeout for the fleet scan")
 	fs.BoolVarP(&f.verbose, "verbose", "v", false, "include passing and skipped checks")
+	fs.StringVar(&f.policyPath, "policy", "",
+		"policy file applied to every cluster (default ./"+policy.DefaultFile+" if present)")
+	fs.BoolVar(&f.noPolicy, "no-policy", false, "ignore ./"+policy.DefaultFile)
 
 	_ = cmd.MarkFlagRequired("target-version")
 	return cmd
@@ -62,6 +68,11 @@ func runFleet(cmd *cobra.Command, f fleetFlags) error {
 	target, err := analyzer.ParseVersion(f.targetVersion)
 	if err != nil {
 		return fmt.Errorf("--target-version: %w", err)
+	}
+
+	pol, _, err := loadPolicy(checkFlags{policyPath: f.policyPath, noPolicy: f.noPolicy})
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), f.timeout)
@@ -78,6 +89,9 @@ func runFleet(cmd *cobra.Command, f fleetFlags) error {
 		Contexts:      f.contexts,
 		Concurrency:   f.concurrency,
 		TargetVersion: target,
+	}
+	if pol != nil {
+		scanner.Finalize = func(r *analyzer.Report) { pol.ApplyTo(r, time.Now()) }
 	}
 
 	fr, err := scanner.Scan(ctx)
