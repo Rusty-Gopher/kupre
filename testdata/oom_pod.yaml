@@ -1,0 +1,27 @@
+# A pod that is currently Running and Ready, but whose container's previous
+# restart was an OOM kill. Only oom-killed-containers should flag it; the pod
+# is otherwise healthy.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cache
+  namespace: shop
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "True"
+  containerStatuses:
+    - name: redis
+      ready: true
+      restartCount: 4
+      image: registry.invalid/redis:7
+      imageID: ""
+      state:
+        running:
+          startedAt: "2026-07-27T09:00:00Z"
+      lastState:
+        terminated:
+          exitCode: 137
+          reason: OOMKilled
+          finishedAt: "2026-07-27T08:59:00Z"

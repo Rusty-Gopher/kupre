@@ -1,0 +1,14 @@
+# A pod the scheduler cannot place. The PodScheduled condition carries the
+# scheduler's literal reasoning, which pending-pods-explained must surface.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bigmem
+  namespace: batch
+status:
+  phase: Pending
+  conditions:
+    - type: PodScheduled
+      status: "False"
+      reason: Unschedulable
+      message: "0/3 nodes are available: 3 Insufficient memory."

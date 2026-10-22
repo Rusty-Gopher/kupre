@@ -1,0 +1,22 @@
+# A pod whose container cannot start because its Secret does not exist. The
+# health mission must surface the cluster's own explanation, not just "not ready".
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-6f9c
+  namespace: shop
+status:
+  phase: Pending
+  conditions:
+    - type: Ready
+      status: "False"
+  containerStatuses:
+    - name: web
+      ready: false
+      restartCount: 0
+      image: registry.invalid/web:1.0
+      imageID: ""
+      state:
+        waiting:
+          reason: CreateContainerConfigError
+          message: secret "web-credentials" not found

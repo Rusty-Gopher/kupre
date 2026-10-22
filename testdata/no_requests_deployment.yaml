@@ -1,0 +1,23 @@
+# A healthy Deployment whose container declares no resource requests at all.
+# missing-resource-requests must flag it; rollouts-stuck must not.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bare
+  namespace: shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bare
+  template:
+    metadata:
+      labels:
+        app: bare
+    spec:
+      containers:
+        - name: bare
+          image: registry.invalid/bare:1.0
+status:
+  replicas: 1
+  readyReplicas: 1

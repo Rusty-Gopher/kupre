@@ -1,0 +1,16 @@
+# A Job that exhausted its retries. failed-jobs must report the Failed
+# condition with the controller's reason.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  namespace: shop
+spec:
+  backoffLimit: 3
+status:
+  failed: 4
+  conditions:
+    - type: Failed
+      status: "True"
+      reason: BackoffLimitExceeded
+      message: Job has reached the specified backoff limit

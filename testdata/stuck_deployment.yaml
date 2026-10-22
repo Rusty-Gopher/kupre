@@ -1,0 +1,31 @@
+# A Deployment below its desired replica count with the deployment controller's
+# own verdict that progress has stopped. rollouts-stuck must report it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout
+  namespace: shop
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: checkout
+  template:
+    metadata:
+      labels:
+        app: checkout
+    spec:
+      containers:
+        - name: checkout
+          image: registry.invalid/checkout:2.1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+status:
+  replicas: 3
+  readyReplicas: 1
+  conditions:
+    - type: Progressing
+      status: "False"
+      reason: ProgressDeadlineExceeded

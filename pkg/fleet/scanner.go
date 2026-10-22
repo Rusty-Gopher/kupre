@@ -23,6 +23,10 @@ type Scanner struct {
 	Concurrency int
 	// TargetVersion is the upgrade target applied to every cluster.
 	TargetVersion analyzer.Version
+
+	// scan runs the scan for one context. Nil means the real connect-and-scan
+	// path; tests override it to exercise Scan without a live cluster.
+	scan func(ctx context.Context, name string) ClusterResult
 }
 
 // ClusterResult pairs a context name with its report or the error that
@@ -92,6 +96,10 @@ func (s *Scanner) Scan(ctx context.Context) (*FleetReport, error) {
 	if limit <= 0 {
 		limit = 4
 	}
+	scanOne := s.scan
+	if scanOne == nil {
+		scanOne = s.scanOne
+	}
 
 	var (
 		wg      sync.WaitGroup
@@ -121,7 +129,7 @@ func (s *Scanner) Scan(ctx context.Context) (*FleetReport, error) {
 				return
 			}
 
-			res := s.scanOne(ctx, name)
+			res := scanOne(ctx, name)
 
 			mu.Lock()
 			results = append(results, res)

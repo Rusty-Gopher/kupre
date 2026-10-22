@@ -165,14 +165,21 @@ func runCheck(cmd *cobra.Command, f checkFlags, mission analyzer.Mission) error 
 		return err
 	}
 
-	code := rep.ExitCode()
-	if f.failOnWarn && code == exitWarnings {
-		code = exitBlocked
-	}
-	if code != exitOK {
+	if code := exitCodeFor(rep, f.failOnWarn); code != exitOK {
 		return exitWith(code)
 	}
 	return nil
+}
+
+// exitCodeFor maps a report to the process exit code. --fail-on-warn promotes
+// a warnings-only verdict to the blocking exit code; every other verdict is
+// unchanged.
+func exitCodeFor(rep *analyzer.Report, failOnWarn bool) int {
+	code := rep.ExitCode()
+	if failOnWarn && code == exitWarnings {
+		code = exitBlocked
+	}
+	return code
 }
 
 // formatFunc renders a report to a writer.

@@ -1,0 +1,21 @@
+# A running, ready pod with a clean restart history. Health checks must not
+# report anything for it.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: healthy
+  namespace: shop
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "True"
+  containerStatuses:
+    - name: app
+      ready: true
+      restartCount: 0
+      image: registry.invalid/app:1.0
+      imageID: ""
+      state:
+        running:
+          startedAt: "2026-07-01T00:00:00Z"

@@ -1,0 +1,15 @@
+# The kubelet's warning event for testdata/failing_pod.yaml - the most specific
+# cause the cluster offers, which pod-failure-causes must report verbatim.
+apiVersion: v1
+kind: Event
+metadata:
+  name: web-6f9c.17a1b2c3
+  namespace: shop
+involvedObject:
+  kind: Pod
+  namespace: shop
+  name: web-6f9c
+type: Warning
+reason: Failed
+message: 'Error: secret "web-credentials" not found'
+lastTimestamp: "2026-07-27T10:00:00Z"

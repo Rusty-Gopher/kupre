@@ -1,0 +1,15 @@
+# A Job that completed successfully. failed-jobs must not report it.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nightly-report
+  namespace: shop
+spec:
+  backoffLimit: 3
+status:
+  succeeded: 1
+  conditions:
+    - type: Complete
+      status: "True"
+      reason: CompletionsReached
+      message: Reached expected number of succeeded pods
