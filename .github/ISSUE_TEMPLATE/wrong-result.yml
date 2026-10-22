@@ -1,0 +1,40 @@
+name: Wrong result
+description: kupre passed something that is broken, or flagged something that is fine
+labels: [correctness]
+body:
+  - type: markdown
+    attributes:
+      value: A wrong verdict is the most serious bug kupre can have. Thank you for reporting it.
+  - type: input
+    id: check
+    attributes:
+      label: Check name
+      placeholder: pdb-blocks-drain
+    validations: {required: true}
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What went wrong
+      options:
+        - False pass (kupre said fine, it was not)
+        - False alarm (kupre flagged something that is fine)
+        - Wrong fix or command
+    validations: {required: true}
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What actually happened
+      description: The upgrade failure, error message, or why the finding is wrong. Upstream links help.
+    validations: {required: true}
+  - type: textarea
+    id: finding
+    attributes:
+      label: The finding from `kupre ... -o json`
+      description: Only the relevant finding. Remove anything sensitive.
+      render: json
+  - type: input
+    id: versions
+    attributes:
+      label: kupre version, cluster version and target version
+      placeholder: kupre 0.2.0, cluster 1.36.4, target 1.37.0, EKS
+    validations: {required: true}

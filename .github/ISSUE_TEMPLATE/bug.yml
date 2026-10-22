@@ -1,0 +1,20 @@
+name: Bug
+description: kupre crashed, errored, or behaved unexpectedly
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations: {required: true}
+  - type: textarea
+    id: repro
+    attributes:
+      label: Command and output
+      render: text
+    validations: {required: true}
+  - type: input
+    id: versions
+    attributes:
+      label: kupre version, OS, cluster version and platform
+      placeholder: kupre 0.2.0, macOS arm64, Kubernetes 1.36.4 on kubeadm
+    validations: {required: true}
