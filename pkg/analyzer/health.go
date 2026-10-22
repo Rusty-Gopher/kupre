@@ -114,6 +114,8 @@ func HealthChecks() []Check {
 		// Retired software is a present-tense security exposure, not just an
 		// upgrade concern: no more security patches of any kind ship for it.
 		"ingress-nginx-retired": true,
+		// Running an unpatched release is a present-tense exposure too.
+		"kubernetes-version-support": true,
 	}
 	for _, c := range AllChecks() {
 		if reused[c.Name] {

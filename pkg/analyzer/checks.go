@@ -15,5 +15,6 @@ func AllChecks() []Check {
 	out = append(out, CertChecks()...)
 	out = append(out, PlatformChecks()...)
 	out = append(out, CoreDNSChecks()...)
+	out = append(out, LifecycleChecks()...)
 	return out
 }
