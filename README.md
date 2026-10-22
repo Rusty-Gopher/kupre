@@ -1,144 +1,210 @@
+<h1 align="center">kupre</h1>
+
+<p align="center">
+  <strong>Know before you upgrade.</strong><br>
+  Kubernetes upgrade preflight, health check and certificate audit for live clusters.<br>
+  Read-only. One binary. Verdicts you can put in CI.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Rusty-Gopher/kupre/actions/workflows/ci.yml"><img src="https://github.com/Rusty-Gopher/kupre/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/Rusty-Gopher/kupre/releases"><img src="https://img.shields.io/github/v/release/Rusty-Gopher/kupre" alt="Release"></a>
+  <a href="https://goreportcard.com/report/github.com/Rusty-Gopher/kupre"><img src="https://goreportcard.com/badge/github.com/Rusty-Gopher/kupre" alt="Go Report Card"></a>
+  <img src="https://img.shields.io/badge/release%20data-Kubernetes%201.37-326ce5?logo=kubernetes&logoColor=white" alt="Release data: Kubernetes 1.37">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
+</p>
+
+<p align="center">
+  <img src="docs/demo/tui.gif" alt="kupre interactive mode: pick a mission and a cluster, get an ordered worklist, open a finding for the exact fix" width="900">
+</p>
+
+Most upgrade outages aren't caused by deprecated APIs. They're caused by a
+PodDisruptionBudget that stalls the drain, a fail-closed webhook with one
+replica, a kubelet flag the new version rejects, or a certificate that expires
+mid-rollout. kupre checks all of that against the live cluster. It returns an
+**ordered worklist**: what blocks the upgrade, what needs lead time, and what
+only a human can verify. Each item comes with the exact `kubectl` command
+that fixes it.
+
+```text
+$ kupre check --target-version 1.37.0
+
+cluster demo   upgrade v1.36.4 → v1.37.0
+NOT READY - 1 blocking, 8 to review
+
+BLOCKS THE UPGRADE: fix before you start
+  1. 1 PodDisruptionBudget(s) allow zero disruptions and will block node drain
+     · shop/checkout (PodDisruptionBudget)  minAvailable=1, healthy 1/1, disruptionsAllowed=0
+     $ kubectl scale deployment/checkout -n shop --replicas=2
+
+START NOW: these need lead time
+  2. ingress-nginx is in use (0 controller pod(s), 1 IngressClass(es), 1 Ingress(es)); it was
+     retired in March 2026 and gets no more security patches
+  ...
 ```
-    __
-   / /___  ______  ________
-  / //_/ / / / __ \/ ___/ _ \
- / ,< / /_/ / /_/ / /  /  __/
-/_/|_|\__,_/ .___/_/   \___/
-          /_/
-  KUBERNETES PREFLIGHT & REVIEW ENGINE
-```
 
-[![CI](https://github.com/Rusty-Gopher/kupre/actions/workflows/ci.yml/badge.svg)](https://github.com/Rusty-Gopher/kupre/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/Rusty-Gopher/kupre)](https://github.com/Rusty-Gopher/kupre/releases)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+## Why kupre
 
-Kubernetes upgrade preflight, health check and certificate audit for live
-clusters. Read-only, single binary. Pick a mission:
-
-- **Upgrade preflight**: is this cluster ready for a target version?
-- **Health check**: what is broken right now, and why?
-- **Certificate audit**: what certificates exist, when do they expire?
-
-Problems come out as a worklist, ordered by what to fix first. Every scan also
-saves a shareable HTML report next to where you ran it.
+- **The whole upgrade question, not one slice of it.** 61 checks across
+  removed APIs (live objects *and* Helm release history), drain blockers,
+  webhooks, version skew, CoreDNS migration, kubelet and feature-gate
+  breakage, end-of-life dates, certificates, and provider-specific hazards
+  for kubeadm, Cluster API and OpenStack.
+- **Release data that keeps up.** Kubernetes 1.37 data shipped with every
+  entry checked against the upstream changelog. A target beyond kupre's data
+  is reported as *unknown*, never as clean.
+- **"Couldn't check" is never "pass".** Forbidden lists, missing permissions
+  and failed discovery become *skipped* or *inconclusive*, by name. This is
+  tested end to end, including a service account with no permissions at all.
+- **Every claim states its evidence and its limits.** `kupre checks -v`
+  shows what each check inspects and what it cannot conclude.
+- **Read-only by construction.** It only issues `get` and `list` calls, and
+  CI fails the build if a write call ever appears in the code.
+  [`deploy/rbac.yaml`](deploy/rbac.yaml) is the complete grant it needs.
+- **Built for teams:** exit codes, versioned JSON, a GitHub Action,
+  expiring waivers, and baselines so CI fails only on *new* problems.
 
 ## Install
 
-Prebuilt binaries for Linux, macOS and Windows are on the
-[releases page](https://github.com/Rusty-Gopher/kupre/releases) — download,
-unpack, run `./kupre`. Every release ships checksums, an SBOM and a build
-attestation.
-
-With Go 1.26+ installed:
-
 ```bash
+# Prebuilt binaries: Linux, macOS, Windows (amd64, arm64)
+# https://github.com/Rusty-Gopher/kupre/releases
+
+# Go 1.26+
 go install github.com/Rusty-Gopher/kupre/cmd/kupre@latest
+
+# Container image (multi-arch, distroless, non-root)
+docker run --rm -v ~/.kube:/home/nonroot/.kube:ro ghcr.io/rusty-gopher/kupre health
+# (add --network host for a cluster on localhost, such as kind)
 ```
 
-Or from source:
+Every release ships checksums, SBOMs and a signed build-provenance
+attestation: `gh attestation verify --owner Rusty-Gopher <file>`.
+
+## Quick start
 
 ```bash
-git clone https://github.com/Rusty-Gopher/kupre.git
-cd kupre
-make tui       # builds and starts the interactive mode
+kupre                                   # interactive: pick a mission and a cluster
+kupre check --target-version 1.37.0     # upgrade preflight
+kupre health                            # what is broken right now, and why
+kupre certs                             # every certificate kupre can see, and when it expires
+kupre fleet --target-version 1.37.0     # every context in your kubeconfig
+kupre checks -v                         # all 61 checks, no cluster needed
 ```
 
-`make build` compiles `./kupre` without starting it.
+The only input is a kubeconfig. kupre works with any cluster it can reach:
+EKS, GKE, AKS, kubeadm, Cluster API, OpenStack, k3s, kind. Provider checks
+only switch on when their platform is detected.
 
-## Run it
+| Mission | Answers | Typical finding |
+|---|---|---|
+| `check` | Is this cluster ready for version X? | PDB blocks drain · removed API in a Helm release · kubelet flag removed in the target version |
+| `health` | What is broken right now, and why? | CrashLoop with the cluster's own reason · stuck rollout · release past end of life |
+| `certs` | What expires, and when? | Webhook CA bundle expiring · TLS Secret expired · cert-manager renewal failing |
 
-Running `kupre` with no arguments starts the interactive mode:
+## In CI
 
-1. Intro screen. Press enter.
-2. Pick a mission.
-3. Pick a kubeconfig from the list, or press `e` to type a path.
-4. Pick a cluster if the file has more than one.
-5. Upgrade preflight only: type the target version, like `1.36.0`. The current
-   version is read from the cluster, you never enter it.
-6. Browse the results. The saved report path is shown under the verdict.
+<p align="center">
+  <img src="docs/demo/cli.gif" alt="kupre in scripts: JSON verdict and exit code, then a baseline so only new problems fail" width="900">
+</p>
 
-Keys in the results screen:
+**Exit codes are the verdict:** `0` ready · `1` blocking · `2` warnings only ·
+`3` scan could not complete. A failed scan is never reported as ready.
 
-| Key | Action |
-|-----|--------|
-| up / down | move between findings |
-| enter | open a finding: resources, fix steps, exact kubectl commands |
-| p | show passing checks |
-| r | scan again after a fix |
-| q | quit |
+### GitHub Action
 
-Loop: fix the top item, press `r`, repeat until the verdict says ready.
+```yaml
+- uses: Rusty-Gopher/kupre@v0.2.0
+  with:
+    target-version: 1.37.0          # mission: check (default) | health | certs
+    fail-on: blocking               # blocking (default) | warnings | never
+    baseline: kupre-baseline.json   # optional: fail only on new findings
+```
 
-## What it needs
+The action writes the report to the job summary and sets `verdict`,
+`exit-code` and `report` (the JSON path) as outputs. It reads
+`$KUBECONFIG`, or whatever you pass as `kubeconfig:`.
 
-A kubeconfig. That is the only input. Any cluster the kubeconfig can reach
-works: managed offerings like EKS, GKE, AKS or MetaKube, self-managed kubeadm,
-on-prem, k3s, kind.
+### Output formats
 
-Provider-specific checks activate only where they apply. On an OpenStack-based
-cluster the Cinder and Octavia checks run; on a kubeadm cluster the kubeadm
-config checks run; everywhere else they stay silent. The core checks are the
-same on every cluster.
+`-o table` (the worklist) · `flat` · `json` · `markdown` · `html`.
+`--json-file report.json` also saves the full JSON report, whatever format
+goes to stdout. The JSON carries `schemaVersion`. Fields may be added within
+a version; any rename or removal bumps it.
 
-## Scripts and CI
+### Policy: waivers, overrides, baselines
+
+Put a `.kupre.yaml` next to where kupre runs, or pass `--policy path`:
+
+```yaml
+version: 1
+disable: [missing-resource-requests]      # still reported, as skipped
+severity:
+  single-replica-workloads: info          # recorded on the finding
+waivers:
+  - check: legacy-endpoints
+    resources: [{namespace: shop, name: legacy-api}]   # omit to waive the whole check
+    reason: migrating to EndpointSlice in Q1
+    owner: team-shop
+    expires: 2026-12-31                   # required; expired waivers stop applying, loudly
+```
+
+`--baseline previous.json` accepts warnings that were already there, so a
+pipeline fails only on what's new.
+
+Some rules never bend:
+- **A blocker cannot be waived or baselined.** Accepting one takes an
+  explicit severity override, and that override is printed on the finding.
+- **Accepted findings stay visible** in their own section of the report.
+- **A waiver scoped to specific resources** doesn't cover a new offender of
+  the same check.
+- **A typo in the policy file fails the run** (exit 3) instead of silently
+  doing nothing.
+
+## In the cluster
+
+A nightly read-only health check, with JSON in the pod log:
 
 ```bash
-kupre check --target-version 1.36.0    # upgrade preflight, exit code is the verdict
-kupre health                           # health check
-kupre certs                            # certificate audit
-kupre fleet --target-version 1.36.0    # every kubeconfig context
-kupre checks -v                        # list all checks, no cluster needed
+kubectl apply -f deploy/rbac.yaml -f deploy/cronjob.yaml
 ```
-
-- Output formats: `table`, `flat`, `json`, `markdown`, `html`.
-- `-o html` in a terminal writes `kupre-<mission>-report.html` and prints the
-  path; redirected output streams as usual.
-- Exit codes: 0 ready, 1 blocking, 2 warnings only, 3 scan failed. A failed
-  scan is never reported as ready.
-- JSON output carries `schemaVersion`. New fields may appear within a
-  version; renamed or removed fields, statuses or exit codes bump it.
-
-## How it compares
-
-kubent, Pluto and kubepug answer one question: which deprecated APIs are in
-use. Popeye lints cluster health. kupre's job is the whole pre-upgrade
-question — deprecated APIs are four of its 51 checks; the rest cover what
-actually breaks upgrades: PDBs that block node drains, fail-closed webhooks on
-single-replica backends, kubelet version skew, expiring certificates, CoreDNS
-config migration, and provider-specific hazards (kubeadm, Cluster API,
-OpenStack).
-
-|  | kupre | kubent | Pluto | kubepug | Popeye |
-|---|---|---|---|---|---|
-| Deprecated APIs, live cluster | yes | yes | partial | yes | no |
-| Helm release manifests scanned | yes | yes | yes | no | no |
-| Drain blockers (PDBs), webhooks, node skew | yes | no | no | no | partial |
-| Certificate expiry audit | yes | no | no | no | no |
-| Health mission | yes | no | no | no | yes |
-| Target-version preflight verdict | yes | no | no | yes | no |
-| Deprecation data current | 1.37 | frozen at 1.32, unmaintained since Jan 2025 | current | current | n/a |
-
-Two honest boundaries: scanning rendered manifests in CI *before* they reach a
-cluster is Pluto's territory — kupre reads only live clusters. And no
-live-object scan can prove deprecated API *usage* (the API server converts
-objects on read), which is why kupre classifies evidence as confirmed versus
-unknown instead of guessing — `kupre checks -v` shows what every check
-measures and what it cannot.
 
 ## Permissions
 
-- An admin kubeconfig works as is.
-- For a limited account, apply `deploy/rbac.yaml`. Read access only, each rule
-  says which checks need it.
-- Checks without permission skip and name the missing permission.
+An admin kubeconfig works as is. For least privilege, apply
+[`deploy/rbac.yaml`](deploy/rbac.yaml). It grants only `get` and `list`,
+and each rule names the checks that use it. Checks without permission skip
+and name the missing permission. CI proves on every commit that this RBAC is
+enough for a complete scan.
+
+## How it compares
+
+|  | kupre | kubent | Pluto | kubepug | Popeye |
+|---|---|---|---|---|---|
+| Removed APIs, live cluster | ✅ | ✅ | partial | ✅ | — |
+| Removed APIs in Helm releases | ✅ | ✅ | ✅ | — | — |
+| Drain blockers, webhooks, version skew | ✅ | — | — | — | partial |
+| Kubelet, feature-gate and kubeadm breakage per release | ✅ | — | — | — | — |
+| Certificate audit | ✅ | — | — | — | — |
+| Health mission | ✅ | — | — | — | ✅ |
+| Waivers with expiry, baselines | ✅ | — | — | — | — |
+| Release data | 1.37 | frozen at 1.32 | current | current | n/a |
+
+Two honest boundaries. Scanning rendered manifests in CI *before* they reach
+a cluster is Pluto's job; kupre reads live clusters. And no scan of live
+objects can prove *usage* of a deprecated API version, because the API server
+converts objects on read. So kupre reports confirmed and unknown evidence
+separately instead of guessing.
 
 ## Development
 
 ```bash
-make test      # unit tests, no cluster needed
-make check     # format, vet, tests
+make check         # format, vet, unit tests
+make integration   # end to end against $KUBECONFIG (CI runs kind 1.35-1.37)
 ```
 
-New checks must not claim more than they measured.
+New checks must state their evidence and limits, and must not claim more
+than they measured. Release data must quote its upstream source. To
+re-record the demos, see [`docs/demo/`](docs/demo/).
 
 MIT licensed.
