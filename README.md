@@ -73,9 +73,12 @@ START NOW: these need lead time
 # Go 1.26+
 go install github.com/Rusty-Gopher/kupre/cmd/kupre@latest
 
-# Homebrew and krew (coming soon: the tap goes live with the next release)
-# brew install rusty-gopher/tap/kupre
-# kubectl krew index add rusty-gopher https://github.com/Rusty-Gopher/homebrew-tap && kubectl krew install rusty-gopher/kupre
+# Homebrew (macOS, Linux)
+brew install rusty-gopher/tap/kupre
+
+# krew: then run it as `kubectl kupre`
+kubectl krew index add rusty-gopher https://github.com/Rusty-Gopher/homebrew-tap
+kubectl krew install rusty-gopher/kupre
 
 # Container image (multi-arch, distroless, non-root)
 docker run --rm -v ~/.kube:/home/nonroot/.kube:ro ghcr.io/rusty-gopher/kupre health
