@@ -87,6 +87,8 @@ func statusGlyph(c colorizer, f analyzer.Finding) string {
 		return c.red("FAIL")
 	case f.Concerning():
 		return c.yellow("WARN")
+	case f.Accepted():
+		return c.dim(" ACK")
 	case f.Result != nil && f.Result.Status == analyzer.StatusSkip:
 		return c.dim("SKIP")
 	default:
@@ -112,7 +114,7 @@ func WriteTable(w io.Writer, r *analyzer.Report, opts Options) error {
 
 	shown := 0
 	for _, f := range r.Findings {
-		interesting := f.Error != "" || f.Blocking() || f.Concerning()
+		interesting := f.Error != "" || f.Blocking() || f.Concerning() || f.Accepted()
 		if !interesting && !opts.Verbose {
 			continue
 		}

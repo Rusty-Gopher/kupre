@@ -80,6 +80,8 @@ func (s Styles) statusStyle(f analyzer.Finding) lipgloss.Style {
 		return s.Fail
 	case f.Concerning():
 		return s.Warn
+	case f.Accepted():
+		return s.Skip
 	case f.Result != nil && f.Result.Status == analyzer.StatusSkip:
 		return s.Skip
 	default:
@@ -96,6 +98,8 @@ func statusLabel(f analyzer.Finding) string {
 		return "FAIL"
 	case f.Concerning():
 		return "WARN"
+	case f.Accepted():
+		return " ACK"
 	case f.Result != nil && f.Result.Status == analyzer.StatusSkip:
 		return "SKIP"
 	default:

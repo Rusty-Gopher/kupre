@@ -218,6 +218,41 @@ type Finding struct {
 	Result   *Result `json:"result"`
 	// Error is set when the check could not be executed at all.
 	Error string `json:"error,omitempty"`
+	// Suppression is set when a policy waiver or a baseline accepts this
+	// finding. An accepted finding stays in the report, in its own section,
+	// but no longer drives the verdict or exit code.
+	Suppression *Suppression `json:"suppression,omitempty"`
+	// PolicyNotes records what policy did to this finding (severity override,
+	// expired waiver), so a changed verdict is always explained.
+	PolicyNotes []string `json:"policyNotes,omitempty"`
+}
+
+// Suppression explains why a finding was accepted.
+type Suppression struct {
+	// Kind is "waiver" or "baseline".
+	Kind    string `json:"kind"`
+	Reason  string `json:"reason"`
+	Owner   string `json:"owner,omitempty"`
+	Expires string `json:"expires,omitempty"`
+}
+
+// Accepted reports whether a waiver or baseline accepted a real problem.
+//
+// Only non-blocking problems can be accepted. A blocker means the operation
+// will break; a waiver cannot change that, so an error-severity failure stays
+// blocking whatever its Suppression says. Accepting one takes an explicit
+// severity override, which is recorded in PolicyNotes.
+func (f Finding) Accepted() bool {
+	if f.Suppression == nil || f.Error != "" || f.Result == nil {
+		return false
+	}
+	switch f.Result.Status {
+	case StatusWarn:
+		return true
+	case StatusFail:
+		return f.Severity != SeverityError
+	}
+	return false
 }
 
 // Blocking reports whether the finding should block an upgrade, i.e. an
@@ -229,7 +264,7 @@ func (f Finding) Blocking() bool {
 // Concerning reports whether the finding warrants attention but does not block:
 // any warn status, or a failure from a non-error-severity check.
 func (f Finding) Concerning() bool {
-	if f.Error != "" || f.Result == nil || f.Blocking() {
+	if f.Error != "" || f.Result == nil || f.Blocking() || f.Accepted() {
 		return false
 	}
 	return f.Result.Status == StatusWarn || f.Result.Status == StatusFail
@@ -255,6 +290,7 @@ type Summary struct {
 	Passed     int `json:"passed"`
 	Skipped    int `json:"skipped"`
 	Errored    int `json:"errored"`
+	Accepted   int `json:"accepted"`
 }
 
 // Summarize tallies the report's findings.
@@ -264,6 +300,8 @@ func (r *Report) Summarize() Summary {
 		switch {
 		case f.Error != "":
 			s.Errored++
+		case f.Accepted():
+			s.Accepted++
 		case f.Blocking():
 			s.Blocking++
 		case f.Concerning():
@@ -380,6 +418,8 @@ const (
 	BucketReviewLater
 	// BucketInconclusive holds checks that could not run.
 	BucketInconclusive
+	// BucketAccepted holds findings a waiver or baseline accepted.
+	BucketAccepted
 )
 
 // Title is the worklist heading for the bucket.
@@ -397,6 +437,8 @@ func (b Bucket) Title() string {
 		return "NOT BLOCKING THIS UPGRADE"
 	case BucketInconclusive:
 		return "COULD NOT BE CHECKED"
+	case BucketAccepted:
+		return "ACCEPTED: waived or in baseline"
 	default:
 		return ""
 	}
@@ -410,6 +452,7 @@ var worklistOrder = []Bucket{
 	BucketVerifyManually,
 	BucketResolveFirst,
 	BucketReviewLater,
+	BucketAccepted,
 }
 
 // Bucket places the finding in the worklist.
@@ -426,6 +469,9 @@ func (f Finding) Bucket() Bucket {
 	}
 	if f.Result.Status == StatusPass || f.Result.Status == StatusSkip {
 		return BucketNone
+	}
+	if f.Accepted() {
+		return BucketAccepted
 	}
 
 	action := f.Action

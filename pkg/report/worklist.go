@@ -43,6 +43,10 @@ func WriteWorklist(w io.Writer, r *analyzer.Report, opts Options) error {
 			writeCollapsed(w, c, g, r.Mission)
 			continue
 		}
+		if g.Bucket == analyzer.BucketAccepted && !opts.Verbose {
+			writeAccepted(w, c, g, r.Mission)
+			continue
+		}
 		fmt.Fprintf(w, "\n%s\n", bucketHeading(c, g.Bucket, r.Mission))
 		for _, f := range g.Findings {
 			item++
@@ -80,6 +84,9 @@ func writeVerdict(w io.Writer, c colorizer, r *analyzer.Report, sum analyzer.Sum
 	default:
 		verdict = c.green(c.bold("READY")) + c.dim(" - all systems nominal")
 	}
+	if sum.Accepted > 0 {
+		verdict += c.dim(fmt.Sprintf(" (%d accepted by policy)", sum.Accepted))
+	}
 	fmt.Fprintf(w, "%s\n\n", verdict)
 }
 
@@ -110,6 +117,9 @@ func writeWorkItem(w io.Writer, c colorizer, n int, f analyzer.Finding, opts Opt
 
 	fmt.Fprintf(w, "\n  %s %s\n", c.bold(fmt.Sprintf("%d.", n)), msg)
 	fmt.Fprintf(w, "     %s\n", c.dim(f.Check))
+	for _, line := range policyLines(f) {
+		fmt.Fprintf(w, "     %s %s\n", c.yellow("policy:"), wrapText(line, 66, "             "))
+	}
 
 	if f.Result == nil {
 		return
@@ -155,6 +165,37 @@ func writeCollapsed(w io.Writer, c colorizer, g analyzer.BucketGroup, mission st
 	fmt.Fprintf(w, "\n%s %s\n", c.bold(g.Bucket.TitleFor(mission)),
 		c.dim(fmt.Sprintf("(%d)", len(g.Findings))))
 	fmt.Fprintf(w, "  %s\n\n", c.dim(strings.Join(names, ", ")))
+}
+
+// writeAccepted renders accepted findings one line each, with the reason, so
+// what was waived is never out of sight even when it is out of the way.
+func writeAccepted(w io.Writer, c colorizer, g analyzer.BucketGroup, mission string) {
+	fmt.Fprintf(w, "\n%s %s\n", c.bold(g.Bucket.TitleFor(mission)),
+		c.dim(fmt.Sprintf("(%d)", len(g.Findings))))
+	for _, f := range g.Findings {
+		fmt.Fprintf(w, "  %s %s\n", f.Check, c.dim(policyLines(f)[0]))
+	}
+	fmt.Fprintln(w)
+}
+
+// policyLines describes what policy did to a finding, accepted reason first.
+func policyLines(f analyzer.Finding) []string {
+	var out []string
+	if s := f.Suppression; s != nil && f.Accepted() {
+		line := "accepted by " + s.Kind
+		var meta []string
+		if s.Owner != "" {
+			meta = append(meta, s.Owner)
+		}
+		if s.Expires != "" {
+			meta = append(meta, "until "+s.Expires)
+		}
+		if len(meta) > 0 {
+			line += " (" + strings.Join(meta, ", ") + ")"
+		}
+		out = append(out, line+": "+s.Reason)
+	}
+	return append(out, f.PolicyNotes...)
 }
 
 // writePassing lists the checks that found nothing, for verbose runs.

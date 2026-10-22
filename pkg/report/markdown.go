@@ -13,7 +13,11 @@ import (
 func WriteMarkdown(w io.Writer, r *analyzer.Report, opts Options) error {
 	sum := r.Summarize()
 
-	fmt.Fprintf(w, "# Upgrade preflight: `%s`\n\n", r.Cluster)
+	title := "Upgrade preflight"
+	if m, ok := analyzer.MissionByName(r.Mission); ok {
+		title = m.Title
+	}
+	fmt.Fprintf(w, "# %s: `%s`\n\n", title, r.Cluster)
 	fmt.Fprintf(w, "**%s**\n\n", missionHeading(r))
 
 	switch verdict(sum, r) {
@@ -34,6 +38,9 @@ func WriteMarkdown(w io.Writer, r *analyzer.Report, opts Options) error {
 	fmt.Fprintf(w, "| Skipped | %d |\n", sum.Skipped)
 	if sum.Errored > 0 {
 		fmt.Fprintf(w, "| Errored | %d |\n", sum.Errored)
+	}
+	if sum.Accepted > 0 {
+		fmt.Fprintf(w, "| Accepted (waiver or baseline) | %d |\n", sum.Accepted)
 	}
 	fmt.Fprintln(w)
 
@@ -63,6 +70,8 @@ func mdStatus(f analyzer.Finding) string {
 	switch {
 	case f.Error != "":
 		return "ERROR"
+	case f.Accepted():
+		return "ACCEPTED"
 	case f.Blocking():
 		return "FAIL"
 	case f.Concerning():
@@ -107,6 +116,10 @@ func writeMarkdownFinding(w io.Writer, n int, f analyzer.Finding, opts Options) 
 			fmt.Fprintln(w, line)
 		}
 		fmt.Fprint(w, "\n</details>\n\n")
+	}
+
+	for _, line := range policyLines(f) {
+		fmt.Fprintf(w, "> **Policy:** %s\n\n", line)
 	}
 
 	if f.Result.Remediation != "" {

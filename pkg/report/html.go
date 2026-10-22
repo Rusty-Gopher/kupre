@@ -200,6 +200,7 @@ func writeHTMLOverview(w io.Writer, mission string, groups []analyzer.BucketGrou
 		analyzer.BucketResolveFirst:   "Already degraded today. Worth clearing so new failures stay attributable.",
 		analyzer.BucketReviewLater:    "Real findings, lower urgency.",
 		analyzer.BucketInconclusive:   "Checks that could not run - treat their subjects as unverified, not clean.",
+		analyzer.BucketAccepted:       "Real findings a policy waiver or baseline accepted. They do not affect the verdict until the waiver expires.",
 	}
 	for _, g := range groups {
 		fmt.Fprintf(w, `    <li><label for="pg-%s" class="t-%s"><strong>%s</strong> <span>%d finding(s)</span><br>%s</label></li>`+"\n",
@@ -249,6 +250,9 @@ func writeHTMLFinding(w io.Writer, n int, f analyzer.Finding, opts Options) {
 				fmt.Fprintf(w, `      <li><code>%s</code>%s</li>`+"\n", e(res.String()), detail)
 			}
 			fmt.Fprint(w, "    </ul>\n")
+		}
+		for _, line := range policyLines(f) {
+			fmt.Fprintf(w, `    <p class="fix"><strong>Policy</strong> %s</p>`+"\n", e(line))
 		}
 		if f.Result.Remediation != "" {
 			fmt.Fprintf(w, `    <p class="fix"><strong>Fix</strong> %s</p>`+"\n", e(f.Result.Remediation))
@@ -340,8 +344,12 @@ func htmlVerdict(sum analyzer.Summary, r *analyzer.Report) (class, text, sub str
 // htmlBucketClass maps buckets to CSS classes.
 func htmlBucketClass(b analyzer.Bucket) string {
 	switch b {
-	case analyzer.BucketFixBeforeStart, analyzer.BucketInconclusive:
+	case analyzer.BucketFixBeforeStart:
 		return "b-block"
+	case analyzer.BucketInconclusive:
+		return "b-unknown"
+	case analyzer.BucketAccepted:
+		return "b-accepted"
 	case analyzer.BucketPlanAhead:
 		return "b-plan"
 	case analyzer.BucketVerifyManually:
@@ -411,10 +419,10 @@ h1 .arrow{color:var(--muted);font-weight:400}
 section.bucket{margin:26px 0}
 section.bucket h2{font-size:14px;text-transform:uppercase;letter-spacing:1px;
   padding-left:10px;border-left:4px solid var(--muted);margin:0 0 12px}
-.b-block h2{border-color:var(--red);color:var(--red)}
+.b-block h2,.b-unknown h2{border-color:var(--red);color:var(--red)}
 .b-plan h2{border-color:var(--amber);color:var(--amber)}
 .b-verify h2{border-color:var(--blue);color:var(--blue)}
-.b-resolve h2,.b-later h2{color:var(--muted)}
+.b-resolve h2,.b-later h2,.b-accepted h2{color:var(--muted)}
 .finding{background:var(--card);border:1px solid var(--line);border-radius:10px;
   padding:16px 18px;margin-bottom:12px;break-inside:avoid}
 .finding-head{display:flex;gap:10px;align-items:baseline}
@@ -459,6 +467,8 @@ section.quiet li.s::before{content:"– "}
 #pg-verify:checked ~ #page-verify{display:block}
 #pg-resolve:checked ~ #page-resolve{display:block}
 #pg-later:checked ~ #page-later{display:block}
+#pg-unknown:checked ~ #page-unknown{display:block}
+#pg-accepted:checked ~ #page-accepted{display:block}
 #pg-quiet:checked ~ #page-quiet{display:block}
 
 nav.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:22px 0 18px;
@@ -467,7 +477,7 @@ nav.tabs label{cursor:pointer;padding:6px 12px;border-radius:8px;font-size:13.5p
   font-weight:600;color:var(--muted);border:1px solid var(--line);user-select:none}
 nav.tabs label span{opacity:.7;font-weight:700;margin-left:4px}
 nav.tabs label:hover{color:var(--fg)}
-nav.tabs label.t-block{color:var(--red)}
+nav.tabs label.t-block,nav.tabs label.t-unknown{color:var(--red)}
 nav.tabs label.t-plan{color:var(--amber)}
 nav.tabs label.t-verify{color:var(--blue)}
 #pg-overview:checked ~ nav.tabs label[for="pg-overview"],
@@ -476,6 +486,8 @@ nav.tabs label.t-verify{color:var(--blue)}
 #pg-verify:checked ~ nav.tabs label[for="pg-verify"],
 #pg-resolve:checked ~ nav.tabs label[for="pg-resolve"],
 #pg-later:checked ~ nav.tabs label[for="pg-later"],
+#pg-unknown:checked ~ nav.tabs label[for="pg-unknown"],
+#pg-accepted:checked ~ nav.tabs label[for="pg-accepted"],
 #pg-quiet:checked ~ nav.tabs label[for="pg-quiet"]{
   background:var(--card);border-color:currentColor;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 

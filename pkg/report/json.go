@@ -38,6 +38,7 @@ type jsonSummary struct {
 	Passed     int `json:"passed"`
 	Skipped    int `json:"skipped"`
 	Errored    int `json:"errored"`
+	Accepted   int `json:"accepted"`
 	Total      int `json:"total"`
 }
 
@@ -64,6 +65,10 @@ type jsonFinding struct {
 	// consumer can tell a short list from a complete one.
 	ResourcesTruncated int    `json:"resourcesTruncated,omitempty"`
 	Error              string `json:"error,omitempty"`
+	// Suppression is set when a waiver or baseline accepted the finding;
+	// accepted findings do not count toward the verdict.
+	Suppression *analyzer.Suppression `json:"suppression,omitempty"`
+	PolicyNotes []string              `json:"policyNotes,omitempty"`
 }
 
 type jsonResource struct {
@@ -90,6 +95,8 @@ func bucketSlug(b analyzer.Bucket) string {
 		return "review-later"
 	case analyzer.BucketInconclusive:
 		return "inconclusive"
+	case analyzer.BucketAccepted:
+		return "accepted"
 	default:
 		return "none"
 	}
@@ -118,7 +125,8 @@ func WriteJSON(w io.Writer, r *analyzer.Report, opts Options) error {
 		Upgrade:       jsonUpgrade{From: r.Upgrade.From.String(), To: r.Upgrade.To.String()},
 		Summary: jsonSummary{
 			Blocking: sum.Blocking, Concerning: sum.Concerning, Passed: sum.Passed,
-			Skipped: sum.Skipped, Errored: sum.Errored, Total: len(r.Findings),
+			Skipped: sum.Skipped, Errored: sum.Errored, Accepted: sum.Accepted,
+			Total: len(r.Findings),
 		},
 		Verdict:  verdict(sum, r),
 		ExitCode: r.ExitCode(),
@@ -149,6 +157,9 @@ func WriteJSON(w io.Writer, r *analyzer.Report, opts Options) error {
 			Limits:   f.Limits,
 			Error:    f.Error,
 			Status:   "error",
+
+			Suppression: f.Suppression,
+			PolicyNotes: f.PolicyNotes,
 		}
 		if f.Result != nil {
 			jf.Status = f.Result.Status.String()

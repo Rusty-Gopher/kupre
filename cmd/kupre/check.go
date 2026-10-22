@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Rusty-Gopher/kupre/pkg/analyzer"
+	"github.com/Rusty-Gopher/kupre/pkg/policy"
 	"github.com/Rusty-Gopher/kupre/pkg/provider"
 	"github.com/Rusty-Gopher/kupre/pkg/report"
 
@@ -37,6 +38,9 @@ type checkFlags struct {
 	timeout       time.Duration
 	failOnWarn    bool
 	quiet         bool
+	policyPath    string
+	noPolicy      bool
+	baselinePath  string
 }
 
 // newMissionCmd builds a non-interactive subcommand for one mission.
@@ -78,6 +82,12 @@ func newMissionCmd(missionName, use, short string) *cobra.Command {
 		"exit non-zero (1) when only warnings are found")
 	fs.BoolVarP(&f.quiet, "quiet", "q", false,
 		"suppress the banner")
+	fs.StringVar(&f.policyPath, "policy", "",
+		"policy file with disabled checks, severity overrides and waivers (default ./"+policy.DefaultFile+" if present)")
+	fs.BoolVar(&f.noPolicy, "no-policy", false,
+		"ignore ./"+policy.DefaultFile)
+	fs.StringVar(&f.baselinePath, "baseline", "",
+		"previous kupre -o json report; warnings already in it no longer affect the exit code")
 
 	if mission.NeedsTarget {
 		_ = cmd.MarkFlagRequired("target-version")
@@ -97,6 +107,13 @@ func runCheck(cmd *cobra.Command, f checkFlags, mission analyzer.Mission) error 
 	}
 
 	writer, err := formatWriter(f.output)
+	if err != nil {
+		return err
+	}
+
+	// Policy problems surface before touching the cluster: a typo in a waiver
+	// must fail the run, not quietly stop applying.
+	pol, base, err := loadPolicy(f)
 	if err != nil {
 		return err
 	}
@@ -140,6 +157,12 @@ func runCheck(cmd *cobra.Command, f checkFlags, mission analyzer.Mission) error 
 	// A provider that could not even determine applicability leaves a hole in
 	// the scan; record it as a tool error so the verdict is inconclusive.
 	rep.Errors = append(rep.Errors, detectFailures...)
+	if pol != nil {
+		pol.Apply(rep, time.Now())
+	}
+	if base != nil {
+		base.Apply(rep)
+	}
 
 	// HTML is a browser artifact, not terminal output. When stdout is a
 	// terminal, write the report to a file beside the working directory and
@@ -169,6 +192,38 @@ func runCheck(cmd *cobra.Command, f checkFlags, mission analyzer.Mission) error 
 		return exitWith(code)
 	}
 	return nil
+}
+
+// loadPolicy resolves --policy, the ./.kupre.yaml default and --baseline.
+func loadPolicy(f checkFlags) (*policy.Policy, *policy.Baseline, error) {
+	known := policy.KnownChecks(analyzer.AllChecks())
+	for _, p := range provider.Registered() {
+		for name := range policy.KnownChecks(p.Checks()) {
+			known[name] = true
+		}
+	}
+
+	var (
+		pol *policy.Policy
+		err error
+	)
+	switch {
+	case f.policyPath != "":
+		pol, err = policy.Load(f.policyPath, known)
+	case !f.noPolicy:
+		pol, err = policy.Discover("", known)
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("policy: %w", err)
+	}
+
+	var base *policy.Baseline
+	if f.baselinePath != "" {
+		if base, err = policy.LoadBaseline(f.baselinePath); err != nil {
+			return nil, nil, err
+		}
+	}
+	return pol, base, nil
 }
 
 // exitCodeFor maps a report to the process exit code. --fail-on-warn promotes
